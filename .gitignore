@@ -1,0 +1,17 @@
+*.class
+*.log
+target
+.idea
+project/project
+project/target
+*.iml
+**/node_modules/
+**/package-lock.json
+
+
+Dockerfile
+Dockerfile.input
+.ivy2
+/cache/
+/dump.rdb
+
