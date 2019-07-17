@@ -22,6 +22,7 @@ import com.github.sebruck.EmbeddedRedis
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.cache.{CacheMockAlwaysFalse, RedisCache}
 import com.ubirch.filter.model.{Rejection, RejectionDeserializer}
+import com.ubirch.filter.util.Messages
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.protocol.ProtocolMessage
 import com.ubirch.util.PortGiver
@@ -31,7 +32,7 @@ import org.json4s.JsonAST.{JObject, JString}
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
 
-class RelyOnCassandraTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfterAll {
+class NoCacheScenarioTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfterAll {
 
   var redis: RedisServer = _
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
@@ -58,7 +59,7 @@ class RelyOnCassandraTest extends WordSpec with EmbeddedKafka with EmbeddedRedis
 
   "FilterService" must {
 
-    "detect replay attack of message whose payload has been processed already by the cassandra db" in {
+    "detect replay attack of message whose payload has been processed already by the verification lookup" in {
 
       withRunningKafka {
         val specialConsumerTopic = "json.to.sign.special"
@@ -73,16 +74,15 @@ class RelyOnCassandraTest extends WordSpec with EmbeddedKafka with EmbeddedRedis
         //publish message of which the payload already has been processed once
         publishToKafka(specialConsumerTopic, msgEnvelope)
 
-        val rejection = consumeFirstMessageFrom[Rejection]("com.ubirch.filter.rejection")
+        val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
         rejection.id mustBe msgEnvelope.ubirchPacket.getUUID
-        rejection.message mustBe "The Hash/Payload has been found by the Lookup lib for the Cassandra DB."
-        rejection.rejectionName mustBe "replayAttack"
+        rejection.message mustBe Messages.foundInVerificationMsg
+        rejection.rejectionName mustBe Messages.replayAttackName
 
         Thread.sleep(5000)
       }
     }
   }
-
 
   private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
 

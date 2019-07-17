@@ -18,6 +18,10 @@ package com.ubirch.filter.cache
 
 import org.redisson.Redisson
 
+/**
+  * Cache implementation with a Map that stores the
+  * payload/hash as a key and a boolean (always true)
+  */
 object RedisCache extends Cache {
 
 
@@ -28,11 +32,24 @@ object RedisCache extends Cache {
   private val redisson = Redisson.create()
   private val cache = redisson.getMap[String, Boolean]("UPP-hashes")
 
+  /**
+    * Checks if the hash/payload already is stored in the cache.
+    *
+    * @param hash key
+    * @return value to the key, null if key doesn't exist yet
+    */
   def get(hash: String): Boolean = {
-    cache.get(hash)
+    val result: Any = cache.get(hash)
+    //Todo: weird, that in case of absence null is returned
+    if (result == null) false else true
   }
 
-  //Todo: Using the boolean not, till now. Should I?
+  /**
+    * Sets a new key value pair to the cache.
+    *
+    * @param hash key
+    * @return previous associated value for this key
+    */
   def set(hash: String): Boolean = {
     cache.put(hash, true)
   }

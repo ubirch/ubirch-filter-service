@@ -52,7 +52,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     }
   }
 
-  "The cassandra lookup" must {
+  "The verification lookup" must {
 
     "return the status code of the http response" in {
       val filterService = new FilterService(new CacheMockAlwaysException())
@@ -60,7 +60,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
         .whenRequestMatches(_ => true) //Todo: add proper requirement? e.g. body == "" but how?
         .thenRespondNotFound()
       val payload = UUID.randomUUID().toString
-      val result: Id[Response[String]] = filterService.makeCassandraLookup(payload)
+      val result: Id[Response[String]] = filterService.makeVerificationLookup(payload)
       assert(result.code == StatusCodes.NotFound)
     }
   }
@@ -69,8 +69,10 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
   "Cache exception - when thrown - " must {
 
     "cause a return false in cacheContainsHash()" in {
+
+      val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "key", "false".getBytes)
       val filterService = new FilterService(new CacheMockAlwaysException())
-      filterService.cacheContainsHash("") mustBe false
+      filterService.cacheContainsHash("", cr) mustBe false
     }
 
     "not disturb the forwarding of the UPP in forwardUPP()" in {

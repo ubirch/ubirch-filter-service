@@ -18,9 +18,11 @@ package com.ubirch.filter.util
 
 object Messages {
 
-  val encodingTopic = "com.ubirch.encoding"
+  val jsonTopic = "json.to.sign"
+  val encodingTopic = "com.ubirch.eventlog.encoder"
   val errorTopic = "com.ubirch.filter.error"
   val rejectionTopic = "com.ubirch.filter.rejection"
-  val foundInCacheMsg = "The Hash/Payload has been found in the cache."
-  val foundInCassandraMsg = "The Hash/Payload has been found by the Lookup lib for the Cassandra DB."
+  val replayAttackName = "replay_attack"
+  val foundInCacheMsg = "the hash/payload has been found in the cache."
+  val foundInVerificationMsg = "the hash/payload has been found by the verification lookup."
 }

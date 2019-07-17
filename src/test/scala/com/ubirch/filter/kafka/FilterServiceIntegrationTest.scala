@@ -72,26 +72,27 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
 
       withRunningKafka {
 
-        val messageEnvelopeTopic = "json.to.sign"
+        val messageEnvelopeTopic = Messages.jsonTopic
         val msgEnvelope = generateMessageEnvelope()
 
         //publish message first time
         publishToKafka(messageEnvelopeTopic, msgEnvelope)
-        consumeFirstMessageFrom[MessageEnvelope]("com.ubirch.eventlog.encoder").ubirchPacket.getUUID mustBe
+        consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
 
         //publish message second time (replay attack)
         publishToKafka(messageEnvelopeTopic, msgEnvelope)
 
-        val rejection = consumeFirstMessageFrom[Rejection]("com.ubirch.filter.rejection")
+        val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
         rejection.id mustBe msgEnvelope.ubirchPacket.getUUID
         rejection.message mustBe Messages.foundInCacheMsg
-        rejection.rejectionName mustBe "replayAttack"
+        rejection.rejectionName mustBe Messages.replayAttackName
 
         Thread.sleep(7000)
       }
     }
 
+    /*
     //Todo: Shouldn't this eventually send something to the errormessage queue?
     "not forward unparseable messages" in {
 
@@ -100,33 +101,33 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         val messageEnvelopeTopic = "json.to.sign"
         implicit val serializer: Serializer[String] = new org.apache.kafka.common.serialization.StringSerializer()
 
-        publishToKafka[String](messageEnvelopeTopic, "unpearsable message")
+        publishToKafka[String](messageEnvelopeTopic, "unpearsable example message")
 
         assertThrows[TimeoutException] {
-          consumeFirstMessageFrom[MessageEnvelope]("com.ubirch.eventlog.encoder")
+          consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
         }
         Thread.sleep(7000)
       }
-    }
+    }*/
 
   }
 
 
-  "Cassandra Lookup" must {
+  "Verification Lookup" must {
 
     implicit val backend: SttpBackend[Id, Nothing] = HttpURLConnectionBackend()
 
     "return 200 when hash already has been processed once" in {
       val payloadEncoded = "v1jjADSpJFPl7vTg8gsiui2aTOCL1v4nYrmiTePvcxNBt1x/+JoApHOLa4rjGGEz72PusvGXbF9t6qe8Kbck/w=="
       val filterConsumer = new FilterService(RedisCache)
-      val result = filterConsumer.makeCassandraLookup(payloadEncoded)
+      val result = filterConsumer.makeVerificationLookup(payloadEncoded)
       assert(result.code == StatusCodes.Ok)
     }
 
     "return 404 if hash hasn't been processed yet." in {
       val payload = UUID.randomUUID().toString
       val filterConsumer = new FilterService(RedisCache)
-      val result = filterConsumer.makeCassandraLookup(payload)
+      val result = filterConsumer.makeVerificationLookup(payload)
       assert(result.code == StatusCodes.NotFound)
     }
 
