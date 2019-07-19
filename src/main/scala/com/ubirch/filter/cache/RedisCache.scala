@@ -16,21 +16,34 @@
 
 package com.ubirch.filter.cache
 
+import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.scalalogging.LazyLogging
 import org.redisson.Redisson
 
 /**
   * Cache implementation with a Map that stores the
   * payload/hash as a key and a boolean (always true)
   */
-object RedisCache extends Cache {
+object RedisCache extends Cache with LazyLogging {
 
+  def conf: Config = ConfigFactory.load()
 
-  //Todo: use conf file and not default values?
-  //  protected val config: Config = ConfigFactory.load("application.base.conf")
-  // val conf = Try(config.getConfig("redisson"))
+  private val host: String = conf.getString("filterService.redis.host")
+  private val port: String = conf.getString("filterService.redis.port")
+  private val password: String = conf.getString("filterService.redis.password")
+  private val useCluster: Boolean = conf.getBoolean("filterService.redis.useCluster")
+  private val cacheName: String = conf.getString("filterService.redis.cacheName")
+  var redisConf = new org.redisson.config.Config()
 
-  private val redisson = Redisson.create()
-  private val cache = redisson.getMap[String, Boolean]("UPP-hashes")
+  //Todo: Should we use this? => use "rediss://" for SSL connection
+  //Todo: Is it ok, to always set the password, even if it's ""?
+  if (useCluster)
+    redisConf.useClusterServers().addNodeAddress(host ++ port).setPassword(password)
+  else
+    redisConf.useSingleServer().setAddress(host ++ port).setPassword(password)
+
+  private val redisson = Redisson.create(redisConf)
+  private val cache = redisson.getMap[String, Boolean](cacheName)
 
   /**
     * Checks if the hash/payload already is stored in the cache.
@@ -53,4 +66,14 @@ object RedisCache extends Cache {
   def set(hash: String): Boolean = {
     cache.put(hash, true)
   }
+
+  Runtime.getRuntime.addShutdownHook(new Thread() {
+    override def run(): Unit = {
+
+      logger.info("Shutting down Redis: " + cacheName)
+      redisson.shutdown()
+      Thread.sleep(1000) //Waiting 1 secs
+      logger.info("Bye bye, see you later...")
+    }
+  })
 }

@@ -22,94 +22,126 @@ import java.util.concurrent.TimeoutException
 import java.util.{Base64, UUID}
 
 import com.github.sebruck.EmbeddedRedis
+import com.softwaremill.sttp.testing.SttpBackendStub
 import com.softwaremill.sttp.{HttpURLConnectionBackend, Id, StatusCodes, SttpBackend}
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.cache.RedisCache
-import com.ubirch.filter.model.{Rejection, RejectionDeserializer}
+import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse, RedisCache}
+import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
 import com.ubirch.filter.util.Messages
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.protocol.ProtocolMessage
 import com.ubirch.util.PortGiver
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.JsonAST._
-import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
+import org.scalatest.{BeforeAndAfter, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
 
 
-class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfterAll {
+class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
   implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
+  implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
+
 
   var redis: RedisServer = _
 
-  override def beforeAll: Unit = {
-
+  before {
     redis = new RedisServer(6379)
     redis.start()
-    implicit val kafkaConfig: EmbeddedKafkaConfig =
-      EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+  }
 
-    val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
-    val consumer: FilterService = new FilterService(RedisCache) {
+  after {
+    redis.stop()
+  }
+
+  var consumer: FilterService = _
+
+  def startKafka(bootstrapServers: String): Unit = {
+
+    consumer = new FilterService(RedisCache) {
       override val consumerBootstrapServers: String = bootstrapServers
       override val producerBootstrapServers: String = bootstrapServers
     }
     consumer.consumption.startPolling()
   }
 
-  override def afterAll: Unit = {
-    redis.stop()
-  }
-
 
   "FilterService" must {
 
     "forward message first time and detect reply attack with help of redis cache when send a second time" in {
-
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       withRunningKafka {
 
-        val messageEnvelopeTopic = Messages.jsonTopic
         val msgEnvelope = generateMessageEnvelope()
-
         //publish message first time
-        publishToKafka(messageEnvelopeTopic, msgEnvelope)
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
+        startKafka(bootstrapServers)
         consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
 
         //publish message second time (replay attack)
-        publishToKafka(messageEnvelopeTopic, msgEnvelope)
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
 
         val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
-        rejection.id mustBe msgEnvelope.ubirchPacket.getUUID
         rejection.message mustBe Messages.foundInCacheMsg
         rejection.rejectionName mustBe Messages.replayAttackName
-
-        Thread.sleep(7000)
       }
     }
 
-    /*
-    //Todo: Shouldn't this eventually send something to the errormessage queue?
-    "not forward unparseable messages" in {
+    "must also detect replay attack when cache is down" in {
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       withRunningKafka {
 
-        val messageEnvelopeTopic = "json.to.sign"
+        class FakeFilter(cache: Cache) extends FilterService(cache) {
+          override val consumerBootstrapServers: String = bootstrapServers
+          override val producerBootstrapServers: String = bootstrapServers
+
+          override implicit val backend: SttpBackendStub[Id, Nothing] = SttpBackendStub.synchronous
+            .whenRequestMatches(_ => true)
+            .thenRespondOk()
+        }
+        val fakeFilter = new FakeFilter(new CacheMockAlwaysFalse)
+        fakeFilter.consumption.startPolling()
+
+        val msgEnvelope = generateMessageEnvelope()
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
+
+        val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
+        rejection.message mustBe Messages.foundInVerificationMsg
+        rejection.rejectionName mustBe Messages.replayAttackName
+      }
+    }
+
+    "not forward unparseable messages" in {
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+
+      withRunningKafka {
+
         implicit val serializer: Serializer[String] = new org.apache.kafka.common.serialization.StringSerializer()
 
-        publishToKafka[String](messageEnvelopeTopic, "unpearsable example message")
-
+        publishToKafka[String](Messages.jsonTopic, "unparseable example message")
+        startKafka(bootstrapServers)
+        val message: FilterError = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
+        message.serviceName mustBe "filter-service"
+        message.exceptionName mustBe "JsonParseException"
+        message.message mustBe "unable to parse consumer record with key: null."
         assertThrows[TimeoutException] {
           consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
         }
-        Thread.sleep(7000)
       }
-    }*/
-
+    }
   }
 
 
@@ -117,25 +149,28 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
 
     implicit val backend: SttpBackend[Id, Nothing] = HttpURLConnectionBackend()
 
-    "return 200 when hash already has been processed once" in {
-      val payloadEncoded = "v1jjADSpJFPl7vTg8gsiui2aTOCL1v4nYrmiTePvcxNBt1x/+JoApHOLa4rjGGEz72PusvGXbF9t6qe8Kbck/w=="
-      val filterConsumer = new FilterService(RedisCache)
-      val result = filterConsumer.makeVerificationLookup(payloadEncoded)
-      assert(result.code == StatusCodes.Ok)
-    }
+    //Todo: Remove? As I always need a hash, which really has been used in Dev. Mikolaj even said, the processing should have been aborted, so it returns true.
+    //Todo continue: But as I understood it, as soon as it has been processed anytime it should return true.?
+    //    "return 200 when hash already has been processed once" in {
+    //      val payloadEncoded = "v1jjADSpJFPl7vTg8gsiui2aTOCL1v4nYrmiTePvcxNBt1x/+JoApHOLa4rjGGEz72PusvGXbF9t6qe8Kbck/w=="
+    //      val filterConsumer = new FilterService(RedisCache)
+    //      val result = filterConsumer.makeVerificationLookup(payloadEncoded)
+    //      assert(result.code == StatusCodes.Ok)
+    //    }
 
-    "return 404 if hash hasn't been processed yet." in {
+    "return NotFound if hash hasn't been processed yet." in {
+      val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "key", "Teststring".getBytes)
       val payload = UUID.randomUUID().toString
+      val data = ProcessingData(cr, payload)
       val filterConsumer = new FilterService(RedisCache)
-      val result = filterConsumer.makeVerificationLookup(payload)
+      val result = filterConsumer.makeVerificationLookup(data)
       assert(result.code == StatusCodes.NotFound)
     }
-
   }
 
   "Payload encoding" must {
 
-    "be encoded when retrieved by asText() and decoded when retrieved by binaryValue()" in {
+    "be encoded when retrieved with asText() and decoded when retrieved with binaryValue()" in {
       val payload =
         "v1jjADSpJFPl7vTg8gsiui2aTOCL1v4nYrmiTePvcxNBt1x/+JoApHOLa4rjGGEz72PusvGXbF9t6qe8Kbck/w=="
       val decodedPayload = Base64.getDecoder.decode(payload)
@@ -152,6 +187,5 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
     MessageEnvelope(pm, ctxt)
   }
-
 
 }
