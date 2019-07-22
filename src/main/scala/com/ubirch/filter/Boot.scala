@@ -19,7 +19,4 @@ package com.ubirch.filter
 import com.ubirch.filter.cache.RedisCache
 import com.ubirch.filter.kafka.FilterService
 
-/**
-  * @author ${user.name}
-  */
 object Boot extends FilterService(RedisCache)

@@ -21,8 +21,8 @@ import com.typesafe.scalalogging.LazyLogging
 import org.redisson.Redisson
 
 /**
-  * Cache implementation with a Map that stores the
-  * payload/hash as a key and a boolean (always true)
+  * Cache implementation for redis with a Map that stores the
+  * payload/hash as a key and a boolean as the value that is always true
   */
 object RedisCache extends Cache with LazyLogging {
 
@@ -31,16 +31,16 @@ object RedisCache extends Cache with LazyLogging {
   private val host: String = conf.getString("filterService.redis.host")
   private val port: String = conf.getString("filterService.redis.port")
   private val password: String = conf.getString("filterService.redis.password")
+  private val evaluatedPW = if (password == "") null else password
   private val useCluster: Boolean = conf.getBoolean("filterService.redis.useCluster")
   private val cacheName: String = conf.getString("filterService.redis.cacheName")
   var redisConf = new org.redisson.config.Config()
+  private val useSSH = if (conf.getBoolean("filterService.redis.ssl")) "rediss://" else "redis://"
 
-  //Todo: Should we use this? => use "rediss://" for SSL connection
-  //Todo: Is it ok, to always set the password, even if it's ""?
   if (useCluster)
-    redisConf.useClusterServers().addNodeAddress(host ++ port).setPassword(password)
+    redisConf.useClusterServers().addNodeAddress(useSSH ++ host ++ ":" ++ port).setPassword(evaluatedPW)
   else
-    redisConf.useSingleServer().setAddress(host ++ port).setPassword(password)
+    redisConf.useSingleServer().setAddress(useSSH ++ host ++ ":" ++ port).setPassword(evaluatedPW)
 
   private val redisson = Redisson.create(redisConf)
   private val cache = redisson.getMap[String, Boolean](cacheName)
