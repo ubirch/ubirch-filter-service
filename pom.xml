@@ -34,6 +34,15 @@
         <url>https://ubirch.com/</url>
     </organization>
 
+    <developers>
+        <developer>
+            <name>Lotta Rueger</name>
+            <email>lotta.rueger@ubirch.com</email>
+            <organization>ubirch GmbH</organization>
+            <organizationUrl>https://ubirch.com/</organizationUrl>
+        </developer>
+    </developers>
+
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
@@ -42,7 +51,13 @@
         </license>
     </licenses>
 
+
     <properties>
+
+        <build.number>${timestamp}-dev</build.number>
+        <timestamp>${maven.build.timestamp}</timestamp>
+        <maven.build.timestamp.format>yyyyMMddHHmm</maven.build.timestamp.format>
+
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <encoding>UTF-8</encoding>
@@ -59,7 +74,6 @@
         <maven-deploy-plugin.version>2.8.2</maven-deploy-plugin.version>
         <maven-resources-plugin.version>3.1.0</maven-resources-plugin.version>
         <scalatest-embedded-kafka>2.0.0</scalatest-embedded-kafka>
-        <embedded-cassandra-test>1.2.9</embedded-cassandra-test>
         <scalariform.version>0.2.2</scalariform.version>
         <scalatest.version>3.0.5</scalatest.version>
         <mockito.version>2.23.4</mockito.version>
@@ -121,19 +135,12 @@
             <scope>test</scope>
         </dependency>
 
-        <dependency>
-            <groupId>com.github.nosan</groupId>
-            <artifactId>embedded-cassandra-test</artifactId>
-            <version>${embedded-cassandra-test}</version>
-        </dependency>
-
         <!-- https://mvnrepository.com/artifact/com.github.sebruck/scalatest-embedded-redis -->
         <dependency>
             <groupId>com.github.sebruck</groupId>
             <artifactId>scalatest-embedded-redis_2.12</artifactId>
             <version>0.3.0</version>
         </dependency>
-
 
         <dependency>
             <groupId>org.scalatest</groupId>
@@ -238,6 +245,34 @@
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>${maven-jar-plugin.version}</version>
+            </plugin>
+
+            <!-- create and/or push the created docker image -->
+            <plugin>
+                <groupId>com.spotify</groupId>
+                <artifactId>dockerfile-maven-plugin</artifactId>
+                <version>${dockerfile-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>default</id>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>push</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <buildDirectory>${project.build.outputDirectory}</buildDirectory>
+                    <repository>ubirch/${project.artifactId}</repository>
+                    <tag>${build.number}</tag>
+                    <buildArgs>
+                        <VERSION>${project.version}</VERSION>
+                        <BUILD>${build.number}</BUILD>
+                        <SERVICE_NAME>${project.name}</SERVICE_NAME>
+                        <JAR_LIBS>target/lib</JAR_LIBS>
+                        <JAR_FILE>target/${project.build.finalName}.${project.packaging}</JAR_FILE>
+                    </buildArgs>
+                </configuration>
             </plugin>
             <!-- for mvn deploy to work, disable the default deploy plugin -->
             <plugin>
