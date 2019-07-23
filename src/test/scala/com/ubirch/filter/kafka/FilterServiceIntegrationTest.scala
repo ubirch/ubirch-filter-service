@@ -56,7 +56,6 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     redis.stop()
   }
 
-
   def startKafka(bootstrapServers: String): Unit = {
 
     val consumer: FilterService = new FilterService(RedisCache) {
