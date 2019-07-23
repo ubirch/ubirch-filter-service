@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: "{{ .Values.name }}-monitor"
+  namespace: prometheus # or {{ Values.namespace }}
+  labels:
+    app: {{ .Values.name }} # or prometheus-operator
+    release: prometheus-operator
+spec:
+  endpoints:
+    - interval: 5s # or 30s?
+      path: /
+      port: prometheus-metrics
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.namespace }}
+  selector:
+    matchLabels:
+      app: {{ .Values.fullname }}
+      component: {{ .Values.name }}

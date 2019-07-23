@@ -1,0 +1,59 @@
+namespace: ubirch-prod
+fullname: ubirch.filter-service
+name: filter-service
+image:
+  tag: latest # set to your local image tag if needed
+
+# settings for ingest
+keyServiceURL: "key-service-core-prod.core-prod.svc.cluster.local:8095"
+serverUuid: "10b2e1a4-56b3-4fff-9ada-cc8c20f93016"
+service:
+  type: "NodePort"
+
+redis:
+  #not using master and slave till now, should I?
+  masterURL: "redis-stable-master.core-prod.svc.cluster.local:6379"
+  slaveURL: "redis-stable-slave.core-prod.svc.cluster.local:6379"
+  SSL: "true"
+  host: ""
+  port: ""
+  pw: "redis-secrets"
+  usecluster: ""
+  name: "hashes_payload"
+
+ingress:
+  enabled: true
+  annotations:
+    certmanager.k8s.io/acme-challenge-type: "dns01"
+    certmanager.k8s.io/cluster-issuer: "letsencrypt-prod"
+    certmanager.k8s.io/acme-dns01-provider: "prod-dns-prod-ubirch-com"
+    kubernetes.io/ingress.allow-http: "false"
+  path: /
+  hosts:
+    - prod.ubirch.com
+  tls:
+    - secretName: niomon-prod-ubirch-com-certificate
+      hosts:
+        - niomon.prod.ubirch.com
+
+kafka:
+  consumer:
+    URL: "kafka.core-prod.svc.cluster.local:9092"
+    topic: "json.to.sign"
+    groupID: ""
+    errortopic: "com.ubirch.filter.error"
+    timeout: 1
+    poolrec: 500
+  producer:
+    URL: "kafka.core-prod.svc.cluster.local:9092"
+    errortopic: "com.ubirch.filter.error"
+    rejectiontopic: "com.ubirch.filter.rejection"
+    topic: "com.ubirch.eventlog.encoder"
+    timeout: 2
+
+metrics:
+  prometheus:
+    port: 4321
+
+verification:
+  environment: "prod"

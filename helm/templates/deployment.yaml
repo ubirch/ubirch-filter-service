@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.service.name }}"
+  #name: "niomon-{{ .name }}-deployment"
+  namespace: {{ .Values.namespace }} #do I need this?
+  labels: # do I need those four?
+    app.kubernetes.io/name: {{ include "event-log-dispatcher.name" . }}
+    helm.sh/chart: {{ include "event-log-dispatcher.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ Values.service.replicaCount | default 1 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1 # is this really good? sounds like it wouldn't to a slow update, but exchange everythin at once
+  selector: # do I need the following?
+    matchLabels:
+      app.kubernetes.io/name: {{ include "event-log-dispatcher.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.namespace }}
+        component: {{ .Values.name }}
+        #which is better the first two or the following ones?
+        app.kubernetes.io/name: {{ include "event-log-dispatcher.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ .serviceAccountName | default "default" }}
+      containers:
+        - name: "{{ Values.namespace }}-{{ Values.name }}-container"
+          image: "ubirch/niomon-{{ Values.name }}:{{ .Values.image.tag | default "latest" }}"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9020
+            - containerPort: 9010
+            - containerPort: 4321
+          {{- range (.ports | default (tuple)) }} #can I remove this line?
+          - name: {{ Values.name }}
+            containerPort: {{ .port }}
+          {{- end }}
+          resources:
+            requests:
+              cpu: 0.5
+              memory: 0.3Gi
+            limits:
+              cpu: 1
+              memory: 0.5Gi
+          readinessProbe:
+            tcpSocket:
+              port: {{ Values.readinessPort | default 9010 }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9010
+            initialDelaySeconds: 20
+            periodSeconds: 60
+          env:
+            - name: FILTER_ENV_KAFKA_CONS_BOOTSTRAP
+              value: "{{ .Values.kafka.consumer.URL }}"
+            - name: FILTER_ENV_KAFKA_CONS_TOPIC
+                value: "{{ .Values.kafka.consumer.topic }}"
+            - name: FILTER_ENV_KAFKA_CONS_GROUPID
+                value: "{{ .Values.kafka.consumer.groupID }}"
+            - name: FILTER_ENV_KAFKA_CONS_ERRORTOPIC
+                value: "{{ .Values.kafka.consumer.errortopic }}"
+            - name: FILTER_ENV_KAFKA_CONS_TIMEOUT
+                value: "{{ .Values.kafka.consumer.timeout }}"
+            - name: FILTER_ENV_KAFKA_CONS_POOLREC
+                value: "{{ .Values.kafka.consumer.poolrec }}"
+            - name: FILTER_ENV_KAFKA_PROD_BOOTSTRAP
+                value: "{{ .Values.kafka.producer.URL }}"
+            - name: FILTER_ENV_KAFKA_PROD_ERRORTOPIC
+              value: "{{ .Values.kafka.producer.errortopic }}"
+            - name: FILTER_ENV_KAFKA_PROD_REJECTIONTOPIC
+                value: "{{ .Values.kafka.producer.rejectiontopic }}"
+            - name: FILTER_ENV_KAFKA_PROD_TOPIC
+                value: "{{ .Values.kafka.producer.topic }}"
+            - name: FILTER_ENV_KAFKA_PROD_TIMEOUT
+                value: "{{ .Values.kafka.producer.timeout }}"
+            - name: FILTER_ENV_METRICS_PROMETHEUS_PORT
+                value: "{{ .Values.metrics.prometheus.port }}"
+            - name: FILTER_ENV_REDIS_SSL
+                value: "{{ .Values.redis.SSL }}"
+            - name: FILTER_ENV_REDIS_HOST
+                value: "{{ .Values.redis.host }}"
+            - name: FILTER_ENV_REDIS_PORT
+              value: "{{ .Values.redis.port }}"
+            - name: FILTER_ENV_REDIS_PW
+                value: "{{ .Values.redis.pw }}"
+            - name: FILTER_ENV_REDIS_USECLUSTER
+                value: "{{ .Values.redis.usecluster }}"
+            - name: FILTER_ENV_REDIS_NAME
+                value: "{{ .Values.redis.name }}"
+            - name: FILTER_ENV_VERIFICATION_ENV
+                value: "{{ .Values.verification.environment }}"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
