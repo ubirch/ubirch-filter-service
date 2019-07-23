@@ -1,23 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.fullname }}
+  name: "{{ .Values.fullname }}-k8s-service"
   namespace: {{ .Values.namespace }}
   labels:
     app: {{ .Values.fullname }}
     component: {{ .Values.name }}
-    #the first two or the next four?
-    app.kubernetes.io/name: {{ .Values.name }}
-    helm.sh/chart: {{ include "event-log-dispatcher.chart" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   selector:
     app: {{ .Values.fullname }}
     component: {{ .Values.name }}
-    #the previous or the following two?
-    app.kubernetes.io/name: {{ .Values.name }}
-    app.kubernetes.io/instance: {{ .Values.namespace.name }}
   ports:
     - name: prometheus-metrics
       port: {{ .Values.metrics.prometheus.port }}

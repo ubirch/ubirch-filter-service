@@ -1,47 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.service.name }}"
-  #name: "niomon-{{ .name }}-deployment"
-  namespace: {{ .Values.namespace }} #do I need this?
-  labels: # do I need those four?
-    app.kubernetes.io/name: {{ include "event-log-dispatcher.name" . }}
-    helm.sh/chart: {{ include "event-log-dispatcher.chart" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: "{{ .Values.fullname }}-k8s-deployment"
+  namespace: {{ .Values.namespace }}
 spec:
-  replicas: {{ Values.service.replicaCount | default 1 }}
+  replicas: {{ .Values.service.replicaCount }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 0
-      maxSurge: 1 # is this really good? sounds like it wouldn't to a slow update, but exchange everythin at once
-  selector: # do I need the following?
-    matchLabels:
-      app.kubernetes.io/name: {{ include "event-log-dispatcher.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      maxSurge: 1
   template:
     metadata:
       labels:
-        app: {{ .Values.namespace }}
+        app: {{ .Values.fullname }}
         component: {{ .Values.name }}
-        #which is better the first two or the following ones?
-        app.kubernetes.io/name: {{ include "event-log-dispatcher.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       serviceAccountName: {{ .serviceAccountName | default "default" }}
       containers:
-        - name: "{{ Values.namespace }}-{{ Values.name }}-container"
-          image: "ubirch/niomon-{{ Values.name }}:{{ .Values.image.tag | default "latest" }}"
+        - name: "{{ Values.fullname }}-container"
+          image: " {{ Values.fullname }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: Always
           ports:
             - containerPort: 9020
             - containerPort: 9010
             - containerPort: 4321
-          {{- range (.ports | default (tuple)) }} #can I remove this line?
-          - name: {{ Values.name }}
-            containerPort: {{ .port }}
-          {{- end }}
           resources:
             requests:
               cpu: 0.5
@@ -61,43 +44,43 @@ spec:
             periodSeconds: 60
           env:
             - name: FILTER_ENV_KAFKA_CONS_BOOTSTRAP
-              value: "{{ .Values.kafka.consumer.URL }}"
+              value: {{ .Values.kafka.consumer.URL }}
             - name: FILTER_ENV_KAFKA_CONS_TOPIC
-                value: "{{ .Values.kafka.consumer.topic }}"
+                value: {{ .Values.kafka.consumer.topic }}
             - name: FILTER_ENV_KAFKA_CONS_GROUPID
-                value: "{{ .Values.kafka.consumer.groupID }}"
+                value: {{ .Values.kafka.consumer.groupID }}
             - name: FILTER_ENV_KAFKA_CONS_ERRORTOPIC
-                value: "{{ .Values.kafka.consumer.errortopic }}"
+                value: {{ .Values.kafka.consumer.errortopic }}
             - name: FILTER_ENV_KAFKA_CONS_TIMEOUT
-                value: "{{ .Values.kafka.consumer.timeout }}"
+                value: {{ .Values.kafka.consumer.timeout }}
             - name: FILTER_ENV_KAFKA_CONS_POOLREC
-                value: "{{ .Values.kafka.consumer.poolrec }}"
+                value: {{ .Values.kafka.consumer.poolrec }}
             - name: FILTER_ENV_KAFKA_PROD_BOOTSTRAP
-                value: "{{ .Values.kafka.producer.URL }}"
+                value: {{ .Values.kafka.producer.URL }}
             - name: FILTER_ENV_KAFKA_PROD_ERRORTOPIC
-              value: "{{ .Values.kafka.producer.errortopic }}"
+              value: {{ .Values.kafka.producer.errortopic }}
             - name: FILTER_ENV_KAFKA_PROD_REJECTIONTOPIC
-                value: "{{ .Values.kafka.producer.rejectiontopic }}"
+                value: {{ .Values.kafka.producer.rejectiontopic }}
             - name: FILTER_ENV_KAFKA_PROD_TOPIC
-                value: "{{ .Values.kafka.producer.topic }}"
+                value: {{ .Values.kafka.producer.topic }}
             - name: FILTER_ENV_KAFKA_PROD_TIMEOUT
-                value: "{{ .Values.kafka.producer.timeout }}"
+                value: {{ .Values.kafka.producer.timeout }}
             - name: FILTER_ENV_METRICS_PROMETHEUS_PORT
-                value: "{{ .Values.metrics.prometheus.port }}"
+                value: {{ .Values.metrics.prometheus.port }}
             - name: FILTER_ENV_REDIS_SSL
-                value: "{{ .Values.redis.SSL }}"
+                value: {{ .Values.redis.SSL }}
             - name: FILTER_ENV_REDIS_HOST
-                value: "{{ .Values.redis.host }}"
+                value: {{ .Values.redis.host }}
             - name: FILTER_ENV_REDIS_PORT
-              value: "{{ .Values.redis.port }}"
+              value: {{ .Values.redis.port }}
             - name: FILTER_ENV_REDIS_PW
-                value: "{{ .Values.redis.pw }}"
+                value: {{ .Values.redis.pw }}
             - name: FILTER_ENV_REDIS_USECLUSTER
-                value: "{{ .Values.redis.usecluster }}"
+                value: {{ .Values.redis.usecluster }}
             - name: FILTER_ENV_REDIS_NAME
-                value: "{{ .Values.redis.name }}"
+                value: {{ .Values.redis.name }}
             - name: FILTER_ENV_VERIFICATION_ENV
-                value: "{{ .Values.verification.environment }}"
+                value: {{ .Values.verification.environment }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       terminationGracePeriodSeconds: 30

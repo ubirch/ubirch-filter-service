@@ -1,11 +1,12 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: "{{ .Values.name }}-monitor"
-  namespace: prometheus # or {{ Values.namespace }}
+  name: "{{ .Values.fullname }}-k8s-monitor"
+  namespace: {{ Values.namespace }}
   labels:
-    app: {{ .Values.name }} # or prometheus-operator
+    app: prometheus-operator
     release: prometheus-operator
+    filter-name: {{ .Values.name }} # this seems weird. in original niomon-name:
 spec:
   endpoints:
     - interval: 5s # or 30s?

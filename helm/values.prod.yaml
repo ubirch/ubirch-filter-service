@@ -9,6 +9,7 @@ keyServiceURL: "key-service-core-prod.core-prod.svc.cluster.local:8095"
 serverUuid: "10b2e1a4-56b3-4fff-9ada-cc8c20f93016"
 service:
   type: "NodePort"
+  replicaCount: 1
 
 redis:
   #not using master and slave till now, should I?
