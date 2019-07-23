@@ -38,14 +38,12 @@ import org.json4s.JsonAST._
 import org.scalatest.{BeforeAndAfter, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
 
-
 class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
   implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
   implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
-
 
   var redis: RedisServer = _
 
@@ -68,7 +66,6 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     }
     consumer.consumption.startPolling()
   }
-
 
   "FilterService" must {
 
@@ -143,7 +140,6 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       }
     }
   }
-
 
   "Verification Lookup" must {
 

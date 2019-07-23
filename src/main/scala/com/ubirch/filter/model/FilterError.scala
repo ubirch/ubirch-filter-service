@@ -48,7 +48,7 @@ case class FilterError(
                         value: String = "",
                         errorTime: Option[Date] = Some(new java.util.Date()),
                         serviceName: String = "filter-service"
-                ) {
+                      ) {
 
   override def toString: String = {
     "{\"key\":\"" + key + "\"," +
@@ -59,7 +59,6 @@ case class FilterError(
       "\"serviceName\":\"" + serviceName + "\"}"
   }
 }
-
 
 object FilterErrorDeserializer extends Deserializer[FilterError] {
 

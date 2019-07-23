@@ -51,7 +51,6 @@ case class Rejection(
                       serviceName: String = "filter-service"
                     ) {
 
-
   override def toString: String = {
     "{ \"key\":\"" + key + "\"," +
       "\"message\":\"" + message + "\"," +

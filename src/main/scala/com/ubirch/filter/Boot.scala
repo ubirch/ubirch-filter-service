@@ -18,5 +18,8 @@ package com.ubirch.filter
 
 import com.ubirch.filter.cache.RedisCache
 import com.ubirch.filter.kafka.FilterService
+import com.ubirch.filter.metrics.PrometheusMetrics
 
-object Boot extends FilterService(RedisCache)
+object Boot extends FilterService(RedisCache) {
+  val prometheus = new PrometheusMetrics()
+}

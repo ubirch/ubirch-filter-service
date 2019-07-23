@@ -61,7 +61,8 @@ object RedisCache extends Cache with LazyLogging {
     * Sets a new key value pair to the cache.
     *
     * @param hash key
-    * @return previous associated value for this key
+    * @return previous associated value for this key or null if
+    *         key is set for the first time
     */
   def set(hash: String): Boolean = {
     cache.put(hash, true)
