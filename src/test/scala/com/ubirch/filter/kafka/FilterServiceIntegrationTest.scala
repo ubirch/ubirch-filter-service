@@ -56,11 +56,10 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     redis.stop()
   }
 
-  var consumer: FilterService = _
 
   def startKafka(bootstrapServers: String): Unit = {
 
-    consumer = new FilterService(RedisCache) {
+    val consumer: FilterService = new FilterService(RedisCache) {
       override val consumerBootstrapServers: String = bootstrapServers
       override val producerBootstrapServers: String = bootstrapServers
     }
