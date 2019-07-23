@@ -1,16 +1,12 @@
-namespace: ubirch-demo
+namespace: ubirch-demo-filter
+fullname: ubirch.filter-service
+name: filter-service
 image:
   tag: latest # set to your local image tag if needed
 
 # settings for ingest
 keyServiceURL: "key-service-core-demo.core-demo.svc.cluster.local:8095"
-kafkaURL: "kafka.core-demo.svc.cluster.local:9092"
-redisSecretName: "redis-secrets-avatar"
 serverUuid: "10b2e1a4-56b3-4fff-9ada-cc8c20f93016"
-
-redis:
-  masterURL: "redis-stable-master.core-demo.svc.cluster.local:6379"
-  slaveURL: "redis-stable-slave.core-demo.svc.cluster.local:6379"
 
 ingress:
   enabled: true
@@ -22,7 +18,41 @@ ingress:
   path: /
   hosts:
     - demo.ubirch.com
-  tls: #could I remove this?
-    - secretName: niomon-demo-ubirch-com-certificate
+  tls:
+    - secretName: filter-demo-ubirch-com-certificate
       hosts:
-        - niomon.demo.ubirch.com
+        - filter.demo.ubirch.com
+
+redis:
+  masterURL: "redis-stable-master.core-demo.svc.cluster.local:6379"
+  slaveURL: "redis-stable-slave.core-demo.svc.cluster.local:6379"
+  #not using master and slave till now, should I?
+  SSL: "true"
+  host: ""
+  # This port should be the ssl or non-ssl port depending on the value of the key "SSL"
+  port: ""
+  pw: "redis-secrets-avatar"
+  usecluster: ""
+  name: "hashes_payload"
+
+kafka:
+  consumer:
+    URL: "kafka.core-demo.svc.cluster.local:9092"
+    topic: "json.to.sign"
+    groupID: ""
+    errortopic: "com.ubirch.filter.error"
+    timeout: 1
+    poolrec: 500
+  producer:
+    URL: "kafka.core-demo.svc.cluster.local:9092"
+    errortopic: "com.ubirch.filter.error"
+    rejectiontopic: "com.ubirch.filter.rejection"
+    topic: "com.ubirch.eventlog.encoder"
+    timeout: 2
+
+metrics:
+  prometheus:
+    port: 4321
+
+verification:
+  environment: "demo"

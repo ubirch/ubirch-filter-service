@@ -1,16 +1,15 @@
-namespace: ubirch-dev
+namespace: ubirch-dev-filter
+fullname: ubirch.filter-service
+name: filter-service
 image:
   tag: latest # set to your local image tag if needed
 
 # settings for ingest
 keyServiceURL: "key-service-core-dev.core-dev.svc.cluster.local:8095"
-kafkaURL: "kafka.core-dev.svc.cluster.local:9092"
-redisSecretName: "redis-secrets"
 serverUuid: "9d3c78ff-22f3-4441-a5d1-85c636d486ff"
-
-redis:
-  masterURL: "redis-stable-master.core-dev.svc.cluster.local:6379"
-  slaveURL: "redis-stable-slave.core-dev.svc.cluster.local:6379"
+service:
+  type: "NodePort"
+  replicaCount: 1
 
 ingress:
   enabled: true
@@ -21,13 +20,42 @@ ingress:
     kubernetes.io/ingress.allow-http: "false"
   path: /
   hosts:
-    - dev.ubirch.com #removed niomon.
-  tls: # I would remove this
-    - secretName: niomon-dev-ubirch-com-certificate
+    - dev.ubirch.com
+  tls:
+    - secretName: filter-dev-ubirch-com-certificate
       hosts:
-        - niomon.dev.ubirch.com
+        - filter.dev.ubirch.com
 
-service:
-  name: "filter-service"
-  namespace: "ubirch"
-  replicaCount: 1
+redis:
+  #not using master and slave till now, should I?
+  masterURL: "redis-stable-master.core-dev.svc.cluster.local:6379"
+  slaveURL: "redis-stable-slave.core-dev.svc.cluster.local:6379"
+  SSL: "true"
+  host: ""
+  # This port should be the ssl or non-ssl port depending on the value of the key "SSL"
+  port: ""
+  pw: "redis-secrets"
+  usecluster: ""
+  name: "hashes_payload"
+
+kafka:
+  consumer:
+    URL: "kafka.core-dev.svc.cluster.local:9092"
+    topic: "json.to.sign"
+    groupID: ""
+    errortopic: "com.ubirch.filter.error"
+    timeout: 1
+    poolrec: 500
+  producer:
+    URL: "kafka.core-dev.svc.cluster.local:9092"
+    errortopic: "com.ubirch.filter.error"
+    rejectiontopic: "com.ubirch.filter.rejection"
+    topic: "com.ubirch.eventlog.encoder"
+    timeout: 2
+
+metrics:
+  prometheus:
+    port: 4321
+
+verification:
+  environment: "dev"

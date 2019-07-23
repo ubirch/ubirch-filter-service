@@ -1,4 +1,4 @@
-namespace: ubirch-prod
+namespace: ubirch-prod-filter
 fullname: ubirch.filter-service
 name: filter-service
 image:
@@ -11,17 +11,6 @@ service:
   type: "NodePort"
   replicaCount: 1
 
-redis:
-  #not using master and slave till now, should I?
-  masterURL: "redis-stable-master.core-prod.svc.cluster.local:6379"
-  slaveURL: "redis-stable-slave.core-prod.svc.cluster.local:6379"
-  SSL: "true"
-  host: ""
-  port: ""
-  pw: "redis-secrets"
-  usecluster: ""
-  name: "hashes_payload"
-
 ingress:
   enabled: true
   annotations:
@@ -33,9 +22,21 @@ ingress:
   hosts:
     - prod.ubirch.com
   tls:
-    - secretName: niomon-prod-ubirch-com-certificate
+    - secretName: filter-prod-ubirch-com-certificate
       hosts:
-        - niomon.prod.ubirch.com
+        - filter.prod.ubirch.com
+
+redis:
+  #not using master and slave till now, should I?
+  masterURL: "redis-stable-master.core-prod.svc.cluster.local:6379"
+  slaveURL: "redis-stable-slave.core-prod.svc.cluster.local:6379"
+  SSL: "true"
+  host: ""
+  # This port should be the ssl or non-ssl port depending on the value of the key "SSL"
+  port: ""
+  pw: "redis-secrets"
+  usecluster: ""
+  name: "hashes_payload"
 
 kafka:
   consumer:
