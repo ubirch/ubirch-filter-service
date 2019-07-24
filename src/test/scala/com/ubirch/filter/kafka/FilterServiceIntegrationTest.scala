@@ -173,6 +173,39 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       assert(envelope.ubirchPacket.getPayload.binaryValue() sameElements decodedPayload)
     }
   }
+  //
+  //  "Kafka " must {
+  //
+  //    "pause the consumption of new messages when there is an error sending messages" in {
+  //
+  //      implicit val kafkaConfig: EmbeddedKafkaConfig =
+  //        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+  //      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+  //
+  //      withRunningKafka {
+  //
+  //        val consumer: FilterService = new FilterService(new CacheMockAlwaysFalse) {
+  //          override val consumerBootstrapServers: String = bootstrapServers
+  //          override val producerBootstrapServers: String = bootstrapServers
+  //
+  //          override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
+  //            Future {
+  //              throw new Exception()
+  //            }
+  //          }
+  //        }
+  //        consumer.consumption.startPolling()
+  //
+  //        val msgEnvelope = generateMessageEnvelope()
+  //        publishToKafka(Messages.jsonTopic, msgEnvelope)
+  //
+  //       Thread.sleep(5000)
+  ////        val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
+  ////        rejection.message mustBe Messages.foundInVerificationMsg
+  ////        rejection.rejectionName mustBe Messages.replayAttackName
+  //      }
+  //    }
+  //  }
 
   private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
 
@@ -181,5 +214,6 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
     MessageEnvelope(pm, ctxt)
   }
+
 
 }

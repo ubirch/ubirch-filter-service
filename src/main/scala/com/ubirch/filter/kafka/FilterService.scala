@@ -206,15 +206,15 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     * @param msgEnvelope      The message envelope of the replay attack.
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
-  def reactOnReplayAttack(cr: ConsumerRecord[String, Array[Byte]], msgEnvelope: MessageEnvelope, rejectionMessage: String): Unit = {
+  def reactOnReplayAttack(cr: ConsumerRecord[String, Array[Byte]], msgEnvelope: MessageEnvelope, rejectionMessage: String) = {
+
     implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
     val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
     send(Messages.rejectionTopic, rj.toString.getBytes())
-      .recover { case _ => send(Messages.rejectionTopic, rj.toString.getBytes()) }
-      .recover { case ex: Exception =>
+      .recoverWith { case _ => send(Messages.rejectionTopic, rj.toString.getBytes())
+      }.recoverWith { case ex: Exception =>
         pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${Messages.rejectionTopic}", cr, ex, 2 seconds)
-      }
-    logger.info("replay attack has been detected and successfully published: " + rejectionMessage)
+    }
   }
 
   /**
@@ -225,7 +225,10 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable): Future[Any] = {
+  private def publishErrorMessage(errorMessage: String,
+                                  cr: ConsumerRecord[String, Array[Byte]],
+                                  ex: Throwable): Future[Any] = {
+
     logger.error(errorMessage, ex.getMessage, ex)
     send(Messages.errorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString).toString.getBytes)
       .recover { case _ => logger.info(s"failure publishing to error topic: $errorMessage") }
@@ -245,9 +248,9 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     *                               of further messages.
     */
   @throws[NeedForPauseException]
-  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration): Unit = {
+  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration) = {
     publishErrorMessage(errorMessage, cr, ex)
-    throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
+    throw new NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
   }
 
 }
