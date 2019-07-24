@@ -18,13 +18,13 @@ spec:
     spec:
       serviceAccountName: {{ .serviceAccountName | default "default" }}
       containers:
-        - name: "{{ Values.fullname }}-container"
-          image: " {{ Values.fullname }}:{{ .Values.image.tag | default "latest" }}"
+        - name: "{{ .Values.fullname }}-container"
+          image: {{ .Values.fullname }}:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 9020
             - containerPort: 9010
-            - containerPort: 4321
+            - containerPort: {{ .Values.metrics.prometheus.port }}
           resources:
             requests:
               cpu: 0.5
@@ -34,7 +34,7 @@ spec:
               memory: 0.5Gi
           readinessProbe:
             tcpSocket:
-              port: {{ Values.readinessPort | default 9010 }}
+              port: {{ .Values.readinessPort | default 9010 }}
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
@@ -46,41 +46,41 @@ spec:
             - name: FILTER_ENV_KAFKA_CONS_BOOTSTRAP
               value: {{ .Values.kafka.consumer.URL }}
             - name: FILTER_ENV_KAFKA_CONS_TOPIC
-                value: {{ .Values.kafka.consumer.topic }}
+              value: {{ .Values.kafka.consumer.topic }}
             - name: FILTER_ENV_KAFKA_CONS_GROUPID
-                value: {{ .Values.kafka.consumer.groupID }}
+              value: {{ .Values.kafka.consumer.groupID }}
             - name: FILTER_ENV_KAFKA_CONS_ERRORTOPIC
-                value: {{ .Values.kafka.consumer.errortopic }}
+              value: {{ .Values.kafka.consumer.errortopic }}
             - name: FILTER_ENV_KAFKA_CONS_TIMEOUT
-                value: {{ .Values.kafka.consumer.timeout }}
+              value: {{ .Values.kafka.consumer.timeout }}
             - name: FILTER_ENV_KAFKA_CONS_POOLREC
-                value: {{ .Values.kafka.consumer.poolrec }}
+              value: {{ .Values.kafka.consumer.poolrec }}
             - name: FILTER_ENV_KAFKA_PROD_BOOTSTRAP
-                value: {{ .Values.kafka.producer.URL }}
+              value: {{ .Values.kafka.producer.URL }}
             - name: FILTER_ENV_KAFKA_PROD_ERRORTOPIC
               value: {{ .Values.kafka.producer.errortopic }}
             - name: FILTER_ENV_KAFKA_PROD_REJECTIONTOPIC
-                value: {{ .Values.kafka.producer.rejectiontopic }}
+              value: {{ .Values.kafka.producer.rejectiontopic }}
             - name: FILTER_ENV_KAFKA_PROD_TOPIC
-                value: {{ .Values.kafka.producer.topic }}
+              value: {{ .Values.kafka.producer.topic }}
             - name: FILTER_ENV_KAFKA_PROD_TIMEOUT
-                value: {{ .Values.kafka.producer.timeout }}
+              value: {{ .Values.kafka.producer.timeout }}
             - name: FILTER_ENV_METRICS_PROMETHEUS_PORT
-                value: {{ .Values.metrics.prometheus.port }}
+              value: {{ .Values.metrics.prometheus.port }}
             - name: FILTER_ENV_REDIS_SSL
-                value: {{ .Values.redis.SSL }}
+              value: {{ .Values.redis.SSL }}
             - name: FILTER_ENV_REDIS_HOST
-                value: {{ .Values.redis.host }}
+              value: {{ .Values.redis.host }}
             - name: FILTER_ENV_REDIS_PORT
               value: {{ .Values.redis.port }}
             - name: FILTER_ENV_REDIS_PW
-                value: {{ .Values.redis.pw }}
+              value: {{ .Values.redis.pw }}
             - name: FILTER_ENV_REDIS_USECLUSTER
-                value: {{ .Values.redis.usecluster }}
+              value: {{ .Values.redis.usecluster }}
             - name: FILTER_ENV_REDIS_NAME
-                value: {{ .Values.redis.name }}
+              value: {{ .Values.redis.name }}
             - name: FILTER_ENV_VERIFICATION_ENV
-                value: {{ .Values.verification.environment }}
+              value: {{ .Values.verification.environment }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       terminationGracePeriodSeconds: 30

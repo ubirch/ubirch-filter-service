@@ -77,6 +77,7 @@
         <scalariform.version>0.2.2</scalariform.version>
         <scalatest.version>3.0.5</scalatest.version>
         <mockito.version>2.23.4</mockito.version>
+        <maven-dependency-plugin.version>2.8</maven-dependency-plugin.version>
         <!-- plugins -->
 
         <!-- versions -->
@@ -204,6 +205,8 @@
                         </goals>
                         <configuration>
                             <args>
+                                <arg>-unchecked</arg>
+                                <arg>-deprecation</arg>
                                 <arg>-dependencyfile</arg>
                                 <arg>${project.build.directory}/.scala_dependencies</arg>
                             </args>
@@ -211,6 +214,27 @@
                     </execution>
                 </executions>
             </plugin>
+
+
+            <!-- copy all dependencies into the target/lib dir for our docker image -->
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven-dependency-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <overWriteReleases>false</overWriteReleases>
+                            <includeScope>runtime</includeScope>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- disable surefire -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -243,6 +267,16 @@
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>${maven-jar-plugin.version}</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>lib/</classpathPrefix>
+                            <mainClass>com.ubirch.filter.Boot</mainClass>
+                            <useUniqueVersions>false</useUniqueVersions>
+                        </manifest>
+                    </archive>
+                </configuration>
             </plugin>
 
             <!-- create and/or push the created docker image -->

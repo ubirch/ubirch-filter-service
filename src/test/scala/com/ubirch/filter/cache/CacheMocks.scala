@@ -16,14 +16,26 @@
 
 package com.ubirch.filter.cache
 
+import java.util.concurrent.TimeoutException
+
+class CacheMockAlwaysException extends Cache {
+
+  def get(payload: String): Boolean = throw new TimeoutException()
+
+  def set(payload: String): Boolean = throw new TimeoutException()
+}
+
 class CacheMockAlwaysFalse extends Cache {
 
-  def get(payload: String): Boolean = {
-    false
-  }
+  def get(payload: String): Boolean = false
 
-  def set(payload: String): Boolean = {
-    false
-  }
-
+  def set(payload: String): Boolean = false
 }
+
+class CacheMockAlwaysTrue extends Cache {
+
+  def get(payload: String): Boolean = true
+
+  def set(payload: String): Boolean = true
+}
+

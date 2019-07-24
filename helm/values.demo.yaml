@@ -1,12 +1,16 @@
-namespace: ubirch-demo-filter
+namespace: ubirch-demo
 fullname: ubirch.filter-service
 name: filter-service
 image:
-  tag: latest # set to your local image tag if needed
+  tag: latest
 
 # settings for ingest
 keyServiceURL: "key-service-core-demo.core-demo.svc.cluster.local:8095"
 serverUuid: "10b2e1a4-56b3-4fff-9ada-cc8c20f93016"
+
+service:
+  type: "NodePort"
+  replicaCount: "1"
 
 ingress:
   enabled: true

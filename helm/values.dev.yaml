@@ -1,4 +1,4 @@
-namespace: ubirch-dev-filter
+namespace: core-dev
 fullname: ubirch.filter-service
 name: filter-service
 image:

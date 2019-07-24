@@ -1,4 +1,4 @@
-namespace: ubirch-prod-filter
+namespace: ubirch-prod
 fullname: ubirch.filter-service
 name: filter-service
 image:
