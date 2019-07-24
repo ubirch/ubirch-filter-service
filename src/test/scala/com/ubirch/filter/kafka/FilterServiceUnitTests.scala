@@ -132,18 +132,17 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     }
 
     "throw an NeedForPauseException if send doesn't work correctly" in {
-      class fakeFilterService(cache: Cache) extends FilterService(cache) {
+      class ExceptionFilterService(cache: Cache) extends FakeFilterService(cache) {
         override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
-          throw new Exception
+          Future {
+            throw new Exception()
+          }
         }
       }
-      val fakeFilterService = new FakeFilterService(mock[Cache])
-      try {
-        fakeFilterService.forwardUPP(data)
-      } catch {
-        case ex => assert(ex.getClass.getSimpleName == "NeedForPauseException")
-      }
+      val exceptionFilterService = new ExceptionFilterService(mock[Cache])
       //      assertThrows[NeedForPauseException](fakeFilterService.forwardUPP(data))
+      assert(Await.ready(exceptionFilterService.forwardUPP(data), Duration.Inf).isInstanceOf[Failure[NeedForPauseException]])
+
     }
   }
 

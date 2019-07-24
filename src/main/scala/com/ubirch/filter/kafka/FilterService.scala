@@ -28,6 +28,7 @@ import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.express.ExpressKafkaApp
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
@@ -79,7 +80,10 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
   override def process(consumerRecords: Vector[ConsumerRecord[String, Array[Byte]]]): Unit = {
     consumerRecords.foreach { cr =>
 
+      logger.info("Reading a message.")
+
       extractData(cr) foreach { msgEnvelope =>
+        logger.info("In Process ubirchProtocol.UUID: " + msgEnvelope.ubirchPacket.getUUID)
 
         val data = ProcessingData(cr, msgEnvelope.ubirchPacket.getPayload.toString)
 
@@ -181,19 +185,24 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     *                               of further messages.
     */
   @throws[NeedForPauseException]
-  def forwardUPP(data: ProcessingData): Unit = {
+  def forwardUPP(data: ProcessingData) = {
+    logger.info("Inside forwardUPP")
     try
       cache.set(data.payload)
     catch {
       case ex: Exception =>
         publishErrorMessage(s"unable to add $data.payload to cache.", data.cr, ex)
     }
-    send(Messages.encodingTopic, data.cr.value())
-      .recover { case _ => send(Messages.encodingTopic, data.cr.value()) }
-      .recover { case ex =>
-        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${Messages.encodingTopic}", data.cr, ex, 2 seconds)
-      }
-    logger.info("upp message successfully forwarded to encoder: " + data.payload)
+    throw NeedForPauseException("test", "test2")
+    /*    send(Messages.encodingTopic, data.cr.value())
+          .recoverWith { case _ =>
+            logger.info("Inside recover")
+            send(Messages.encodingTopic, data.cr.value())
+          }
+          .recover { case ex =>
+            logger.info("Inside recover no 2")
+            pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${Messages.encodingTopic}", data.cr, ex, 2 seconds)
+          }*/
   }
 
   /**
@@ -206,14 +215,15 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     * @param msgEnvelope      The message envelope of the replay attack.
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
-  def reactOnReplayAttack(cr: ConsumerRecord[String, Array[Byte]], msgEnvelope: MessageEnvelope, rejectionMessage: String) = {
+  def reactOnReplayAttack(cr: ConsumerRecord[String, Array[Byte]], msgEnvelope: MessageEnvelope, rejectionMessage: String): Future[RecordMetadata] = {
 
     implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
     val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
     send(Messages.rejectionTopic, rj.toString.getBytes())
-      .recoverWith { case _ => send(Messages.rejectionTopic, rj.toString.getBytes())
+      .recoverWith {
+        case _ => send(Messages.rejectionTopic, rj.toString.getBytes())
       }.recoverWith { case ex: Exception =>
-        pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${Messages.rejectionTopic}", cr, ex, 2 seconds)
+      pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${Messages.rejectionTopic}", cr, ex, 2 seconds)
     }
   }
 
@@ -225,9 +235,10 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(errorMessage: String,
-                                  cr: ConsumerRecord[String, Array[Byte]],
-                                  ex: Throwable): Future[Any] = {
+  private def publishErrorMessage(
+                                   errorMessage: String,
+                                   cr: ConsumerRecord[String, Array[Byte]],
+                                   ex: Throwable): Future[Any] = {
 
     logger.error(errorMessage, ex.getMessage, ex)
     send(Messages.errorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString).toString.getBytes)
@@ -250,6 +261,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
   @throws[NeedForPauseException]
   def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration) = {
     publishErrorMessage(errorMessage, cr, ex)
+    logger.error("throwing NeedForPauseException to pause kafka message consumption")
     throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
   }
 
