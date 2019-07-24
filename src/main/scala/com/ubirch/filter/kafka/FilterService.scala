@@ -250,7 +250,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
   @throws[NeedForPauseException]
   def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration) = {
     publishErrorMessage(errorMessage, cr, ex)
-    throw new NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
+    throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
   }
 
 }
