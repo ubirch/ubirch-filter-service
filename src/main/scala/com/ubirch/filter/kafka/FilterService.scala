@@ -185,7 +185,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     *                               of further messages.
     */
   @throws[NeedForPauseException]
-  def forwardUPP(data: ProcessingData) = {
+  def forwardUPP(data: ProcessingData): Future[RecordMetadata] = {
     logger.info("Inside forwardUPP")
     try
       cache.set(data.payload)
@@ -193,16 +193,14 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
       case ex: Exception =>
         publishErrorMessage(s"unable to add $data.payload to cache.", data.cr, ex)
     }
-    throw NeedForPauseException("test", "test2")
-    /*    send(Messages.encodingTopic, data.cr.value())
-          .recoverWith { case _ =>
-            logger.info("Inside recover")
-            send(Messages.encodingTopic, data.cr.value())
-          }
-          .recover { case ex =>
-            logger.info("Inside recover no 2")
-            pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${Messages.encodingTopic}", data.cr, ex, 2 seconds)
-          }*/
+    //Todo: @Micha this works correctly:
+    // throw NeedForPauseException("","")
+    send(Messages.encodingTopic, data.cr.value())
+      .recoverWith { case _ => send(Messages.encodingTopic, data.cr.value())
+      }
+      .recoverWith { case ex =>
+        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${Messages.encodingTopic}", data.cr, ex, 2 seconds)
+      }
   }
 
   /**
@@ -238,7 +236,8 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
   private def publishErrorMessage(
                                    errorMessage: String,
                                    cr: ConsumerRecord[String, Array[Byte]],
-                                   ex: Throwable): Future[Any] = {
+                                   ex: Throwable
+                                 ): Future[Any] = {
 
     logger.error(errorMessage, ex.getMessage, ex)
     send(Messages.errorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString).toString.getBytes)
@@ -259,7 +258,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     *                               of further messages.
     */
   @throws[NeedForPauseException]
-  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration) = {
+  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration): Nothing = {
     publishErrorMessage(errorMessage, cr, ex)
     logger.error("throwing NeedForPauseException to pause kafka message consumption")
     throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
