@@ -9,8 +9,6 @@ project/target
 **/package-lock.json
 
 
-Dockerfile
-Dockerfile.input
 .ivy2
 /cache/
 /dump.rdb
