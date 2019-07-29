@@ -1,5 +1,5 @@
 namespace: core-dev
-fullname: ubirch.filter-service
+fullname: filter-service
 name: filter-service
 image:
   tag: latest # set to your local image tag if needed

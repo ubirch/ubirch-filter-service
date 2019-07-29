@@ -19,24 +19,24 @@ package com.ubirch.filter.kafka
 class ConsumerTest
 
 import java.util.concurrent.TimeoutException
-import java.util.{ Base64, UUID }
+import java.util.{Base64, UUID}
 
 import com.github.sebruck.EmbeddedRedis
 import com.softwaremill.sttp.testing.SttpBackendStub
-import com.softwaremill.sttp.{ HttpURLConnectionBackend, Id, StatusCodes, SttpBackend }
+import com.softwaremill.sttp.{HttpURLConnectionBackend, Id, StatusCodes, SttpBackend}
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.cache.{ Cache, CacheMockAlwaysFalse, RedisCache }
-import com.ubirch.filter.model.{ FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer }
+import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse, RedisCache}
+import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
 import com.ubirch.filter.util.Messages
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.protocol.ProtocolMessage
 import com.ubirch.util.PortGiver
-import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
+import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
-import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
+import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.JsonAST._
-import org.scalatest.{ BeforeAndAfter, MustMatchers, WordSpec }
+import org.scalatest.{BeforeAndAfter, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -140,6 +140,7 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
           consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
         }
       }
+
     }
 
     /**

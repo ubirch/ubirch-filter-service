@@ -16,10 +16,15 @@
 
 package com.ubirch.filter.cache
 
+case class NoCacheConnectionException(private val message: String = "",
+                                      private val cause: Throwable = None.orNull) extends Exception(message, cause)
+
 trait Cache {
 
+  @throws[NoCacheConnectionException]
   def get(hash: String): Boolean
 
+  @throws[NoCacheConnectionException]
   def set(hash: String): Boolean
-
 }
+

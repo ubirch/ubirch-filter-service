@@ -21,7 +21,7 @@ import java.util.concurrent.TimeoutException
 
 import com.fasterxml.jackson.core.JsonParseException
 import com.softwaremill.sttp.{HttpURLConnectionBackend, _}
-import com.ubirch.filter.cache.Cache
+import com.ubirch.filter.cache.{Cache, NoCacheConnectionException}
 import com.ubirch.filter.model.{FilterError, Rejection}
 import com.ubirch.filter.util.Messages
 import com.ubirch.kafka.MessageEnvelope
@@ -80,10 +80,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
   override def process(consumerRecords: Vector[ConsumerRecord[String, Array[Byte]]]): Unit = {
     consumerRecords.foreach { cr =>
 
-      logger.info("Reading a message.")
-
       extractData(cr) foreach { msgEnvelope =>
-        logger.info("In Process ubirchProtocol.UUID: " + msgEnvelope.ubirchPacket.getUUID)
 
         val data = ProcessingData(cr, msgEnvelope.ubirchPacket.getPayload.toString)
 
@@ -97,7 +94,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
               forwardUPP(data)
             case status =>
               logger.error(s"verification service failure: http-status-code: $status for payload: $data.payload.")
-              throw NeedForPauseException("error processing data by filter service", s"verification service failure: http-status-code: $status for payload: $data.payload.", Some(2 seconds))
+              throw NeedForPauseException("error processing data by filter service", s"verification service failure: http-status-code: $status for key: ${data.cr.key()}.", Some(2 seconds))
           }
         }
       }
@@ -140,8 +137,11 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     try {
       cache.get(data.payload)
     } catch {
+      case ex: NoCacheConnectionException =>
+        publishErrorMessage(s"unable to make cache lookup '${data.cr.key()}'.", data.cr, ex)
+        false
       case ex: Exception =>
-        publishErrorMessage(s"unable to lookup '${data.payload}'.", data.cr, ex)
+        publishErrorMessage(s"unable to make cache lookup '${data.cr.key()}'.", data.cr, ex)
         false
     }
   }
@@ -169,8 +169,8 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     } catch {
       //Todo: Should I catch further Exceptions?
       case ex: TimeoutException =>
-        publishErrorMessage(s"http timeout while verification lookup for ${data.payload}.", data.cr, ex)
-        throw NeedForPauseException(s"http timeout while verification lookup for ${data.payload}: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
+        publishErrorMessage(s"http timeout while verification lookup for ${data.cr.key()}.", data.cr, ex)
+        throw NeedForPauseException(s"http timeout while verification lookup for ${data.cr.key()}: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
     }
   }
 
@@ -186,18 +186,18 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     */
   @throws[NeedForPauseException]
   def forwardUPP(data: ProcessingData): Future[RecordMetadata] = {
-    logger.info("Inside forwardUPP")
     try
       cache.set(data.payload)
     catch {
+      case ex: NoCacheConnectionException =>
+        publishErrorMessage(s"unable to add ${data.cr.key()} to cache", data.cr, ex)
       case ex: Exception =>
-        publishErrorMessage(s"unable to add $data.payload to cache.", data.cr, ex)
+        publishErrorMessage(s"unable to add ${data.cr.key()} to cache.", data.cr, ex)
     }
     //Todo: @Micha this works correctly:
     // throw NeedForPauseException("","")
     send(Messages.encodingTopic, data.cr.value())
-      .recoverWith { case _ => send(Messages.encodingTopic, data.cr.value())
-      }
+      .recoverWith { case _ => send(Messages.encodingTopic, data.cr.value()) }
       .recoverWith { case ex =>
         pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${Messages.encodingTopic}", data.cr, ex, 2 seconds)
       }
@@ -233,10 +233,9 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(
-                                   errorMessage: String,
-                                   cr: ConsumerRecord[String, Array[Byte]],
-                                   ex: Throwable
+  private def publishErrorMessage(errorMessage: String,
+                                  cr: ConsumerRecord[String, Array[Byte]],
+                                  ex: Throwable
                                  ): Future[Any] = {
 
     logger.error(errorMessage, ex.getMessage, ex)

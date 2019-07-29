@@ -42,13 +42,12 @@ import org.json4s.{DefaultFormats, Formats}
   * @param rejectionTime represents the time when the rejection occurred
   * @param serviceName   represents the name of the service. By default, we use, filter-service.
   */
-case class Rejection(
-                      key: String,
-                      message: String,
-                      rejectionName: String,
-                      value: String = "empty",
-                      rejectionTime: Option[Date] = Some(new java.util.Date()), //Todo: Is only parsed automatically when held as Option :/
-                      serviceName: String = "filter-service"
+case class Rejection(key: String,
+                     message: String,
+                     rejectionName: String,
+                     value: String = "empty",
+                     rejectionTime: Option[Date] = Some(new java.util.Date()), //Todo: Is only parsed automatically when held as Option :/
+                     serviceName: String = "filter-service"
                     ) {
 
   override def toString: String = {

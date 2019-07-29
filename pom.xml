@@ -62,8 +62,10 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <encoding>UTF-8</encoding>
 
+        <!-- versions -->
         <scala.version>2.12.6</scala.version>
         <scala.compat.version>2.12</scala.compat.version>
+        <io.monix.version>2.3.2</io.monix.version>
 
         <!-- plugins -->
         <scala-maven-plugin.version>3.3.2</scala-maven-plugin.version>
@@ -125,6 +127,14 @@
             <artifactId>core_2.12</artifactId>
             <version>1.5.19</version>
         </dependency>
+
+        <dependency>
+            <groupId>io.monix</groupId>
+            <artifactId>monix_${scala.compat.version}</artifactId>
+            <version>${io.monix.version}</version>
+            <type>pom</type>
+        </dependency>
+
 
         <!-- Test -->
 

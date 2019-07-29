@@ -18,7 +18,11 @@ package com.ubirch.filter.cache
 
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
+import monix.execution.Scheduler.{global => scheduler}
 import org.redisson.Redisson
+import org.redisson.api.{RMap, RedissonClient}
+
+import scala.concurrent.duration._
 
 /**
   * Cache implementation for redis with a Map that stores the
@@ -42,8 +46,27 @@ object RedisCache extends Cache with LazyLogging {
   else
     redisConf.useSingleServer().setAddress(useSSH ++ host ++ ":" ++ port).setPassword(evaluatedPW)
 
-  private val redisson = Redisson.create(redisConf)
-  private val cache = redisson.getMap[String, Boolean](cacheName)
+  private var redisson: RedissonClient = null
+  private var cache: RMap[String, Boolean] = null
+
+  private val initialDelay = 1.seconds
+  private val repeatingDelay = 2.seconds
+
+  private val c = scheduler.scheduleAtFixedRate(initialDelay, repeatingDelay) {
+    try {
+      redisson = Redisson.create(redisConf)
+      cache = redisson.getMap[String, Boolean](cacheName)
+      stopConnecting()
+      logger.info("connection to redis cache has been established.")
+    } catch {
+      case ex: Exception =>
+        logger.info("redis error: not able to create connection: ", ex.getMessage, ex)
+     }
+  }
+
+  private def stopConnecting(): Unit= {
+    c.cancel()
+  }
 
   /**
     * Checks if the hash/payload already is stored in the cache.
@@ -51,7 +74,9 @@ object RedisCache extends Cache with LazyLogging {
     * @param hash key
     * @return value to the key, null if key doesn't exist yet
     */
+  @throws[NoCacheConnectionException]
   def get(hash: String): Boolean = {
+    if (cache == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
     val result: Any = cache.get(hash)
     //Todo: weird, that in case of absence null is returned
     if (result == null) false else true
@@ -64,7 +89,9 @@ object RedisCache extends Cache with LazyLogging {
     * @return previous associated value for this key or null if
     *         key is set for the first time
     */
+  @throws[NoCacheConnectionException]
   def set(hash: String): Boolean = {
+    if (cache == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
     cache.put(hash, true)
   }
 
