@@ -54,7 +54,7 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
     consumer.consumption.startPolling()
   }
 
-  "Missing Redis connection" must {
+  "Missing redis connection" must {
 
     "should cause error messages" in {
       implicit val kafkaConfig: EmbeddedKafkaConfig =
@@ -80,7 +80,7 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
           msgEnvelope.ubirchPacket.getUUID
 
         val cacheError1 = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
-        cacheError1.exceptionName mustBe "NoCacheConnectionException" //NoCacheConnectionException.getClass.getSimpleName
+        cacheError1.exceptionName mustBe "NoCacheConnectionException"
 
       }
     }
