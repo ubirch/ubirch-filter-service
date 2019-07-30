@@ -1,7 +1,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: "{{ .Values.fullname }}-k8s-monitor"
+  name: "{{ .Values.fullname }}"
   namespace: {{ .Values.namespace }}
   labels:
     app: prometheus-operator

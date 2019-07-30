@@ -141,6 +141,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       }
       val exceptionFilterService = new ExceptionFilterService(mock[Cache])
       //      assertThrows[NeedForPauseException](fakeFilterService.forwardUPP(data))
+
       assert(Await.ready(exceptionFilterService.forwardUPP(data), Duration.Inf).isInstanceOf[Failure[NeedForPauseException]])
 
     }

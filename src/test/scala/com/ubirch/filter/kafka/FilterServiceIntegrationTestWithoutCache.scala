@@ -33,10 +33,10 @@ import org.json4s.JsonAST.{JObject, JString}
 import org.scalatest.{BeforeAndAfter, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
 
+import scala.language.postfixOps
 import scala.sys.process._
 
 class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
-
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -44,7 +44,6 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
   implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
 
   var redis: RedisServer = _
-
 
   def startKafka(bootstrapServers: String): Unit = {
 
@@ -55,9 +54,7 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
     consumer.consumption.startPolling()
   }
 
-
   "Missing Redis connection" must {
-
 
     "should cause error messages" in {
       implicit val kafkaConfig: EmbeddedKafkaConfig =
@@ -66,7 +63,11 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
 
       withRunningKafka {
 
-        "fuser -k 6379/tcp" !!
+        try {
+          "fuser -k 6379/tcp" !
+        } catch {
+          case _: Throwable =>
+        }
 
         val msgEnvelope = generateMessageEnvelope()
 
@@ -81,7 +82,6 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
         val cacheError1 = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
         cacheError1.exceptionName mustBe "NoCacheConnectionException" //NoCacheConnectionException.getClass.getSimpleName
 
-
       }
     }
 
@@ -92,7 +92,11 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
 
       withRunningKafka {
 
-        "fuser -k 6379/tcp" !!
+        try {
+          "fuser -k 6379/tcp" !
+        } catch {
+          case _: Throwable =>
+        }
 
         val msgEnvelope = generateMessageEnvelope()
         //publish message first time
@@ -121,6 +125,8 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
 
         try {
           "fuser -k 6379/tcp" !
+        } catch {
+          case _: Throwable =>
         }
 
         val msgEnvelope1 = generateMessageEnvelope()
@@ -147,7 +153,6 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
       }
     }
   }
-
 
   private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
 

@@ -47,8 +47,7 @@ case class Rejection(key: String,
                      rejectionName: String,
                      value: String = "empty",
                      rejectionTime: Option[Date] = Some(new java.util.Date()), //Todo: Is only parsed automatically when held as Option :/
-                     serviceName: String = "filter-service"
-                    ) {
+                     serviceName: String = "filter-service") {
 
   override def toString: String = {
     "{ \"key\":\"" + key + "\"," +

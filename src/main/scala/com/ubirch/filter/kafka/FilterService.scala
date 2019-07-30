@@ -235,8 +235,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     */
   private def publishErrorMessage(errorMessage: String,
                                   cr: ConsumerRecord[String, Array[Byte]],
-                                  ex: Throwable
-                                 ): Future[Any] = {
+                                  ex: Throwable): Future[Any] = {
 
     logger.error(errorMessage, ex.getMessage, ex)
     send(Messages.errorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString).toString.getBytes)

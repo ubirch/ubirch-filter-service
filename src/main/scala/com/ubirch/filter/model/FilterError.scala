@@ -46,8 +46,7 @@ case class FilterError(key: String,
                        exceptionName: String,
                        value: String = "",
                        errorTime: Option[Date] = Some(new java.util.Date()),
-                       serviceName: String = "filter-service"
-                      ) {
+                       serviceName: String = "filter-service") {
 
   override def toString: String = {
     "{\"key\":\"" + key + "\"," +

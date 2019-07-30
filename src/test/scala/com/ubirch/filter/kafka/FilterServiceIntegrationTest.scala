@@ -41,6 +41,8 @@ import redis.embedded.RedisServer
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.language.postfixOps
+import scala.sys.process._
 
 class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
 
@@ -52,6 +54,11 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
   var redis: RedisServer = _
 
   before {
+    try {
+      "fuser -k 6379/tcp" !!
+    } catch {
+      case _: Throwable =>
+    }
     redis = new RedisServer(6379)
     redis.start()
   }

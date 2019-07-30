@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: "{{ .Values.fullname }}-k8s-deployment"
+  name: "{{ .Values.fullname }}"
   namespace: {{ .Values.namespace }}
 spec:
   replicas: {{ .Values.service.replicaCount }}
@@ -19,7 +19,7 @@ spec:
       serviceAccountName: {{ .serviceAccountName | default "default" }}
       containers:
         - name: "{{ .Values.fullname }}-container"
-          image: {{ .Values.fullname }}:latest
+          image: ubirch/filter-service:{{ .Values.image.tag }}
           imagePullPolicy: Always
           ports:
             - containerPort: 9020
@@ -44,43 +44,48 @@ spec:
             periodSeconds: 60
           env:
             - name: FILTER_ENV_KAFKA_CONS_BOOTSTRAP
-              value: {{ .Values.kafka.consumer.URL }}
+              value: "{{ .Values.kafka.consumer.URL }}"
             - name: FILTER_ENV_KAFKA_CONS_TOPIC
-              value: {{ .Values.kafka.consumer.topic }}
+              value: "{{ .Values.kafka.consumer.topic }}"
             - name: FILTER_ENV_KAFKA_CONS_GROUPID
-              value: {{ .Values.kafka.consumer.groupID }}
+              value: "{{ .Values.kafka.consumer.groupID }}"
             - name: FILTER_ENV_KAFKA_CONS_ERRORTOPIC
-              value: {{ .Values.kafka.consumer.errortopic }}
+              value: "{{ .Values.kafka.consumer.errortopic }}"
             - name: FILTER_ENV_KAFKA_CONS_TIMEOUT
-              value: {{ .Values.kafka.consumer.timeout }}
+              value: "{{ .Values.kafka.consumer.timeout }}"
             - name: FILTER_ENV_KAFKA_CONS_POOLREC
-              value: {{ .Values.kafka.consumer.poolrec }}
+              value: "{{ .Values.kafka.consumer.poolrec }}"
             - name: FILTER_ENV_KAFKA_PROD_BOOTSTRAP
-              value: {{ .Values.kafka.producer.URL }}
+              value: "{{ .Values.kafka.producer.URL }}"
             - name: FILTER_ENV_KAFKA_PROD_ERRORTOPIC
-              value: {{ .Values.kafka.producer.errortopic }}
+              value: "{{ .Values.kafka.producer.errortopic }}"
             - name: FILTER_ENV_KAFKA_PROD_REJECTIONTOPIC
-              value: {{ .Values.kafka.producer.rejectiontopic }}
+              value: "{{ .Values.kafka.producer.rejectiontopic }}"
             - name: FILTER_ENV_KAFKA_PROD_TOPIC
-              value: {{ .Values.kafka.producer.topic }}
+              value: "{{ .Values.kafka.producer.topic }}"
             - name: FILTER_ENV_KAFKA_PROD_TIMEOUT
-              value: {{ .Values.kafka.producer.timeout }}
+              value: "{{ .Values.kafka.producer.timeout }}"
             - name: FILTER_ENV_METRICS_PROMETHEUS_PORT
-              value: {{ .Values.metrics.prometheus.port }}
+              value: "{{ .Values.metrics.prometheus.port }}"
             - name: FILTER_ENV_REDIS_SSL
-              value: {{ .Values.redis.SSL }}
-            - name: FILTER_ENV_REDIS_HOST
-              value: {{ .Values.redis.host }}
+              value: "{{ .Values.redis.SSL }}"
+            - name: FILTER_ENV_REDIS_MAIN_HOST
+              value: "{{ .Values.redis.main.host }}"
+            - name: FILTER_ENV_REDIS_REPLICATED_HOST
+              value: "{{ .Values.redis.replicated.host }}"
             - name: FILTER_ENV_REDIS_PORT
-              value: {{ .Values.redis.port }}
+              value: "{{ .Values.redis.port }}"
             - name: FILTER_ENV_REDIS_PW
-              value: {{ .Values.redis.pw }}
-            - name: FILTER_ENV_REDIS_USECLUSTER
-              value: {{ .Values.redis.usecluster }}
+              valueFrom:
+                secretKeyRef:
+                  name: "redis-secrets"
+                  key: "redis-password"
+            - name: FILTER_ENV_REDIS_USEREPLICATED
+              value: "{{ .Values.redis.usereplicated }}"
             - name: FILTER_ENV_REDIS_NAME
-              value: {{ .Values.redis.name }}
+              value: "{{ .Values.redis.name }}"
             - name: FILTER_ENV_VERIFICATION_ENV
-              value: {{ .Values.verification.environment }}
+              value: "{{ .Values.verification.environment }}"
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       terminationGracePeriodSeconds: 30

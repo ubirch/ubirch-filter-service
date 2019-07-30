@@ -16,6 +16,8 @@
 
 package com.ubirch.filter.cache
 
+import java.net.UnknownHostException
+
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import monix.execution.Scheduler.{global => scheduler}
@@ -32,22 +34,25 @@ object RedisCache extends Cache with LazyLogging {
 
   def conf: Config = ConfigFactory.load()
 
-  private val host: String = conf.getString("filterService.redis.host")
   private val port: String = conf.getString("filterService.redis.port")
   private val password: String = conf.getString("filterService.redis.password")
   private val evaluatedPW = if (password == "") null else password
-  private val useCluster: Boolean = conf.getBoolean("filterService.redis.useCluster")
+  private val useReplicated: Boolean = conf.getBoolean("filterService.redis.useReplicated")
   private val cacheName: String = conf.getString("filterService.redis.cacheName")
   var redisConf = new org.redisson.config.Config()
   private val useSSH = if (conf.getBoolean("filterService.redis.ssl")) "rediss://" else "redis://"
 
-  if (useCluster)
-    redisConf.useClusterServers().addNodeAddress(useSSH ++ host ++ ":" ++ port).setPassword(evaluatedPW)
-  else
-    redisConf.useSingleServer().setAddress(useSSH ++ host ++ ":" ++ port).setPassword(evaluatedPW)
+  if (useReplicated) {
+    val mainNode = useSSH ++ conf.getString("filterService.redis.mainHost") ++ ":" ++ port
+    val replicatedNode = useSSH ++ conf.getString("filterService.redis.replicatedHost") ++ ":" ++ port
+    redisConf.useReplicatedServers().addNodeAddress(mainNode, replicatedNode).setPassword(evaluatedPW)
+  } else {
+    val singleNode: String = useSSH ++ conf.getString("filterService.redis.host") ++ ":" ++ port
+    redisConf.useSingleServer().setAddress(singleNode).setPassword(evaluatedPW)
+  }
 
-  private var redisson: RedissonClient = null
-  private var cache: RMap[String, Boolean] = null
+  private var redisson: RedissonClient = _
+  private var cache: RMap[String, Boolean] = _
 
   private val initialDelay = 1.seconds
   private val repeatingDelay = 2.seconds
@@ -59,12 +64,17 @@ object RedisCache extends Cache with LazyLogging {
       stopConnecting()
       logger.info("connection to redis cache has been established.")
     } catch {
+      //Todo: should I differentiate? I don't really implement different behaviour till now at least.
+      case ex: UnknownHostException =>
+        logger.info("redis error: not able to create connection: ", ex.getMessage, ex)
+      case ex: org.redisson.client.RedisConnectionException =>
+        logger.info("redis error: not able to create connection: ", ex.getMessage, ex)
       case ex: Exception =>
         logger.info("redis error: not able to create connection: ", ex.getMessage, ex)
-     }
+    }
   }
 
-  private def stopConnecting(): Unit= {
+  private def stopConnecting(): Unit = {
     c.cancel()
   }
 
