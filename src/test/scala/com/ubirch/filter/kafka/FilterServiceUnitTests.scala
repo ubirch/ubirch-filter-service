@@ -35,7 +35,6 @@ import org.scalatest.{MustMatchers, WordSpec}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-import scala.util.Failure
 
 /**
   * This class provides unit tests for most methods of the filter service.
@@ -68,7 +67,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
   class ExceptionFilterService() extends FakeFilterService() {
     override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
       Future {
-        throw new Exception()
+        throw new Exception("test exception")
       }
     }
   }
@@ -152,7 +151,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
 
     "throw an NeedForPauseException if the send method throws an exception" in {
       val exceptionFilterService = new ExceptionFilterService()
-      assert(Await.ready(exceptionFilterService.forwardUPP(data), Duration.Inf).isInstanceOf[Failure[NeedForPauseException]])
+      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.forwardUPP(data), Duration.Inf))
     }
   }
 
@@ -161,7 +160,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     "throw a NeedForPauseException if the send methdos throws an exception" in {
       val message = new MessageEnvelope(new ProtocolMessage(), mock[JObject])
       val exceptionFilterService = new ExceptionFilterService()
-      assert(Await.ready(exceptionFilterService.reactOnReplayAttack(cr, message, Messages.rejectionTopic), Duration.Inf).isInstanceOf[Failure[NeedForPauseException]])
+      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(cr, message, Messages.rejectionTopic), Duration.Inf))
     }
 
     "send the rejectionMessage successfully" in {

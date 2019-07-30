@@ -38,6 +38,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
+import scala.util.Success
 
 case class ProcessingData(cr: ConsumerRecord[String, Array[Byte]], payload: String)
 
@@ -78,7 +79,9 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
     * @param consumerRecords an entry of the incoming Kafka message
     */
   override def process(consumerRecords: Vector[ConsumerRecord[String, Array[Byte]]]): Unit = {
+
     consumerRecords.foreach { cr =>
+      logger.debug("consumer record received with key: " + cr.key())
 
       extractData(cr) foreach { msgEnvelope =>
 
@@ -194,13 +197,16 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {
       case ex: Exception =>
         publishErrorMessage(s"unable to add ${data.cr.key()} to cache.", data.cr, ex)
     }
-    //Todo: @Micha this works correctly:
-    // throw NeedForPauseException("","")
-    send(Messages.encodingTopic, data.cr.value())
+    val result = send(Messages.encodingTopic, data.cr.value())
       .recoverWith { case _ => send(Messages.encodingTopic, data.cr.value()) }
       .recoverWith { case ex =>
         pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${Messages.encodingTopic}", data.cr, ex, 2 seconds)
       }
+    result.onComplete {
+      case Success(_) => logger.info("successfully forwarded consumer record with key: {}", data.cr.key())
+      case _ =>
+    }
+    result
   }
 
   /**

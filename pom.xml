@@ -28,7 +28,6 @@
     <packaging>jar</packaging>
     <inceptionYear>2019</inceptionYear>
 
-
     <organization>
         <name>ubirch GmbH</name>
         <url>https://ubirch.com/</url>
@@ -42,6 +41,7 @@
             <organizationUrl>https://ubirch.com/</organizationUrl>
         </developer>
     </developers>
+
 
     <licenses>
         <license>
@@ -57,7 +57,6 @@
         <build.number>${timestamp}-dev</build.number>
         <timestamp>${maven.build.timestamp}</timestamp>
         <maven.build.timestamp.format>yyyyMMddHHmm</maven.build.timestamp.format>
-
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <encoding>UTF-8</encoding>
@@ -76,13 +75,10 @@
         <maven-deploy-plugin.version>2.8.2</maven-deploy-plugin.version>
         <maven-resources-plugin.version>3.1.0</maven-resources-plugin.version>
         <scalatest-embedded-kafka>2.3.0</scalatest-embedded-kafka>
-        <scalariform.version>0.2.2</scalariform.version>
         <scalatest.version>3.0.5</scalatest.version>
         <mockito.version>2.23.4</mockito.version>
         <maven-dependency-plugin.version>2.8</maven-dependency-plugin.version>
         <!-- plugins -->
-
-        <!-- versions -->
 
     </properties>
 
@@ -172,36 +168,6 @@
 
         <plugins>
 
-            <!-- code formatting -->
-            <plugin>
-                <groupId>com.github.tashoyan</groupId>
-                <artifactId>scalariform-maven-plugin</artifactId>
-                <version>${scalariform.version}</version>
-                <executions>
-                    <execution>
-                        <phase>process-sources</phase>
-                        <goals>
-                            <goal>format</goal>
-                        </goals>
-                        <configuration>
-                            <firstArgumentOnNewline>Force</firstArgumentOnNewline>
-                            <firstParameterOnNewline>Force</firstParameterOnNewline>
-                            <allowParamGroupsOnNewlines>true</allowParamGroupsOnNewlines>
-                            <danglingCloseParenthesis>Force</danglingCloseParenthesis>
-                            <doubleIndentConstructorArguments>true</doubleIndentConstructorArguments>
-                            <doubleIndentMethodDeclaration>true</doubleIndentMethodDeclaration>
-                            <newlineAtEndOfFile>true</newlineAtEndOfFile>
-                            <placeScaladocAsterisksBeneathSecondAsterisk>true
-                            </placeScaladocAsterisksBeneathSecondAsterisk>
-                            <singleCasePatternOnNewline>false</singleCasePatternOnNewline>
-                            <spacesAroundMultiImports>true</spacesAroundMultiImports>
-                            <rewriteArrowSymbols>false</rewriteArrowSymbols>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- code formatting -->
-
             <plugin>
                 <!-- see http://davidb.github.com/scala-maven-plugin -->
                 <groupId>net.alchim31.maven</groupId>
@@ -224,7 +190,6 @@
                     </execution>
                 </executions>
             </plugin>
-
 
             <!-- copy all dependencies into the target/lib dir for our docker image -->
             <plugin>

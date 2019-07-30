@@ -106,7 +106,6 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     MessageEnvelope(pm, ctxt)
   }
 
-
   "FilterService" must {
 
     "forward message first time and detect reply attack with help of redis cache when send a second time" in {
@@ -260,6 +259,5 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       assert(envelope.ubirchPacket.getPayload.binaryValue() sameElements decodedPayload)
     }
   }
-
 
 }
