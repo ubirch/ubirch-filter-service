@@ -37,11 +37,19 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.util.Failure
 
+/**
+  * This class provides unit tests for most methods of the filter service.
+  */
 class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatchers with LazyLogging {
 
   val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "1234", "false".getBytes)
   val data = ProcessingData(cr, "")
 
+  /**
+    * A fake filter service using mocked Kafka consumer, producer and cache. The send method counts it's calls.
+    *
+    * @param cache The cache used to check if a message has already been received before.
+    */
   class FakeFilterService(cache: Cache = mock[Cache]) extends FilterService(cache) {
     override lazy val consumption: ConsumerRunner[String, Array[Byte]] = mock[ConsumerRunner[String, Array[Byte]]]
     override lazy val production: ProducerRunner[String, Array[Byte]] = mock[ProducerRunner[String, Array[Byte]]]
@@ -54,16 +62,27 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     }
   }
 
+  /**
+    * A filter service, that always throws an exception when the send method is called.
+    */
+  class ExceptionFilterService() extends FakeFilterService() {
+    override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
+      Future {
+        throw new Exception()
+      }
+    }
+  }
+
   "The extractData() method" must {
 
-    "return None when the ConsumerRecord has wrong format" in {
+    "return None when the ConsumerRecord has a wrong format" in {
       val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "1234", "Teststring".getBytes)
       val fakeFilterService = new FakeFilterService
       fakeFilterService.extractData(cr) mustBe None
       assert(fakeFilterService.counter == 1)
     }
 
-    "return None when the ConsumerRecord has nearly correct format" in {
+    "return None when the ConsumerRecord has at least a correct value member" in {
       val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "1234", "false".getBytes)
       val fakeFilterService = new FakeFilterService
       fakeFilterService.extractData(cr) mustBe None
@@ -125,51 +144,24 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
 
   "forwardUPP" must {
 
-    "send the kafka message if cache works correctly" in {
+    "send the kafka message if the cache works correctly" in {
       val fakeFilterService = new FakeFilterService()
       fakeFilterService.forwardUPP(data)
       assert(fakeFilterService.counter == 1)
     }
 
-    "throw an NeedForPauseException if send doesn't work correctly" in {
-      class ExceptionFilterService(cache: Cache) extends FakeFilterService(cache) {
-        override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
-          Future {
-            throw new Exception()
-          }
-        }
-      }
-      val exceptionFilterService = new ExceptionFilterService(mock[Cache])
-      //      assertThrows[NeedForPauseException](fakeFilterService.forwardUPP(data))
-
+    "throw an NeedForPauseException if the send method throws an exception" in {
+      val exceptionFilterService = new ExceptionFilterService()
       assert(Await.ready(exceptionFilterService.forwardUPP(data), Duration.Inf).isInstanceOf[Failure[NeedForPauseException]])
-
     }
   }
 
   "reactOnReplayAttack" must {
 
-    "throw an NeedForPauseException if send doesn't work correctly" in {
-      class ExceptionFilterService(cache: Cache) extends FilterService(cache) {
-        override lazy val consumption: ConsumerRunner[String, Array[Byte]] = mock[ConsumerRunner[String, Array[Byte]]]
-        override lazy val production: ProducerRunner[String, Array[Byte]] = mock[ProducerRunner[String, Array[Byte]]]
-
-        override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
-          Future {
-            throw new Exception()
-          }
-        }
-      }
+    "throw a NeedForPauseException if the send methdos throws an exception" in {
       val message = new MessageEnvelope(new ProtocolMessage(), mock[JObject])
-      val exceptionFilterService = new ExceptionFilterService(mock[Cache])
-
-      //      try {
-      //        exceptionFilterService.reactOnReplayAttack(cr, message, Messages.rejectionTopic)
-      //      } catch {
-      //        case ex => assert(ex.getClass.getSimpleName == "NeedForPauseException")
-
+      val exceptionFilterService = new ExceptionFilterService()
       assert(Await.ready(exceptionFilterService.reactOnReplayAttack(cr, message, Messages.rejectionTopic), Duration.Inf).isInstanceOf[Failure[NeedForPauseException]])
-      // assertThrows[NeedForPauseException](exceptionFilterService.reactOnReplayAttack(cr, message, Messages.rejectionTopic))
     }
 
     "send the rejectionMessage successfully" in {

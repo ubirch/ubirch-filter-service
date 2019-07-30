@@ -49,7 +49,7 @@ case class ProcessingData(cr: ConsumerRecord[String, Array[Byte]], payload: Stri
   * a ubirch lookup service is questioned if the hash/payload has already been processed by the
   * event-log. Only if no replay attack was found the message is forwarded to the event-log system.
   *
-  * @param cache the cache to check if message has already been received before
+  * @param cache The cache used to check if a message has already been received before.
   * @author ${user.name}
   */
 class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte]] {

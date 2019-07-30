@@ -42,6 +42,9 @@ object RedisCache extends Cache with LazyLogging {
   var redisConf = new org.redisson.config.Config()
   private val useSSH = if (conf.getBoolean("filterService.redis.ssl")) "rediss://" else "redis://"
 
+  /**
+    * Uses replicated redis server, when used in dev/prod environment.
+    */
   if (useReplicated) {
     val mainNode = useSSH ++ conf.getString("filterService.redis.mainHost") ++ ":" ++ port
     val replicatedNode = useSSH ++ conf.getString("filterService.redis.replicatedHost") ++ ":" ++ port
@@ -57,6 +60,9 @@ object RedisCache extends Cache with LazyLogging {
   private val initialDelay = 1.seconds
   private val repeatingDelay = 2.seconds
 
+  /**
+    * Scheduler trying to connect to redis server with repeating delay if it's not available on startup.
+    */
   private val c = scheduler.scheduleAtFixedRate(initialDelay, repeatingDelay) {
     try {
       redisson = Redisson.create(redisConf)

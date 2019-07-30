@@ -18,6 +18,10 @@ package com.ubirch.filter.cache
 
 import java.util.concurrent.TimeoutException
 
+/**
+  * Different cache mocks for testing purposes.
+  */
+
 class CacheMockAlwaysException extends Cache {
 
   def get(payload: String): Boolean = throw new TimeoutException()

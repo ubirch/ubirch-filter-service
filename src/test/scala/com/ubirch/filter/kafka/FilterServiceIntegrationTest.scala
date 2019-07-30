@@ -44,6 +44,10 @@ import scala.concurrent.Future
 import scala.language.postfixOps
 import scala.sys.process._
 
+/**
+  * This class provides all integration tests, except for those testing a missing redis connection on startup.
+  * The Kafka config has to be inside each single test to enable parallel testing with different ports.
+  */
 class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
@@ -53,6 +57,10 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
 
   var redis: RedisServer = _
 
+  /**
+    * Method killing any embedded redis application, in case an earlier test was aborted without executing after.
+    * Starting a new embedded redis server for testing purposes.
+    */
   before {
     try {
       "fuser -k 6379/tcp" !!
@@ -63,10 +71,18 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     redis.start()
   }
 
+  /**
+    * Called after all tests. Not working always unfortunately.
+    */
   after {
     redis.stop()
   }
 
+  /**
+    * Method to start a filter service with a polling consumer.
+    *
+    * @param bootstrapServers The url configuration for each test and it's embedded kafka.
+    */
   def startKafka(bootstrapServers: String): Unit = {
 
     val consumer: FilterService = new FilterService(RedisCache) {
@@ -75,6 +91,21 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     }
     consumer.consumption.startPolling()
   }
+
+  /**
+    * Method to generate a message envelope as expected by the filter service.
+    *
+    * @param payload Payload is a random value if not defined explicitly.
+    * @return
+    */
+  private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
+
+    val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
+    pm.setSignature(org.bouncycastle.util.Strings.toByteArray("1111"))
+    val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
+    MessageEnvelope(pm, ctxt)
+  }
+
 
   "FilterService" must {
 
@@ -230,12 +261,5 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     }
   }
 
-  private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
-
-    val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
-    pm.setSignature(org.bouncycastle.util.Strings.toByteArray("1111"))
-    val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
-    MessageEnvelope(pm, ctxt)
-  }
 
 }
