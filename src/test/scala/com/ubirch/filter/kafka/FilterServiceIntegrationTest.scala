@@ -180,17 +180,17 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
 
     }
 
-    /**
-     * Todo: Test to become finished when KafkaExpressApp can handle Future[Failure[Exceptions]]
-     */
     "pause the consumption of new messages when there is an error sending messages" in {
 
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
+      /**
+       * just a cache variable that records what messages are being processed by the filter service
+       */
       val cache = new Cache {
-        var list = List[String]()
+        var list: List[String] = List[String]()
 
         def get(hash: String): Boolean = {
           list = list :+ hash
@@ -202,6 +202,11 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         }
       }
 
+      /**
+       * A fake filter service that always throws an exception, when the send() method is called.
+       *
+       * @param cache The cache is only used to record the messages being processed in this test.
+       */
       class ExceptionFilterService(cache: Cache) extends FilterService(cache) {
 
         override val consumerBootstrapServers: String = bootstrapServers
@@ -220,14 +225,24 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
 
         val msgEnvelope1 = generateMessageEnvelope()
         val msgEnvelope2 = generateMessageEnvelope()
-        logger.info("msgEnvelope1.UUID: " + msgEnvelope1.ubirchPacket.getUUID)
-        logger.info("msgEnvelope2.UUID: " + msgEnvelope2.ubirchPacket.getUUID)
 
         publishToKafka(Messages.jsonTopic, msgEnvelope1)
+        Thread.sleep(5000)
         publishToKafka(Messages.jsonTopic, msgEnvelope2)
 
         Thread.sleep(5000)
+        println(cache.list)
+
+        /**
+         * the first two messages should be msgEnvelope1
+         */
         assert(cache.list.head == cache.list(1))
+
+        /**
+         * the last two messages should be msgEnvelope1 and msgEnvelope2 as the consumer repeats consuming the
+         * not yet committed messages.
+         */
+        assert(cache.list.last != cache.list(cache.list.size - 2))
 
       }
     }
