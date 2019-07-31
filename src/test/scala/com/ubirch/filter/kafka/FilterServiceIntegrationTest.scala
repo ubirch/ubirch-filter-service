@@ -45,9 +45,9 @@ import scala.language.postfixOps
 import scala.sys.process._
 
 /**
-  * This class provides all integration tests, except for those testing a missing redis connection on startup.
-  * The Kafka config has to be inside each single test to enable parallel testing with different ports.
-  */
+ * This class provides all integration tests, except for those testing a missing redis connection on startup.
+ * The Kafka config has to be inside each single test to enable parallel testing with different ports.
+ */
 class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
@@ -58,9 +58,9 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
   var redis: RedisServer = _
 
   /**
-    * Method killing any embedded redis application, in case an earlier test was aborted without executing after.
-    * Starting a new embedded redis server for testing purposes.
-    */
+   * Method killing any embedded redis application, in case an earlier test was aborted without executing after.
+   * Starting a new embedded redis server for testing purposes.
+   */
   before {
     try {
       "fuser -k 6379/tcp" !!
@@ -72,17 +72,17 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
   }
 
   /**
-    * Called after all tests. Not working always unfortunately.
-    */
+   * Called after all tests. Not working always unfortunately.
+   */
   after {
     redis.stop()
   }
 
   /**
-    * Method to start a filter service with a polling consumer.
-    *
-    * @param bootstrapServers The url configuration for each test and it's embedded kafka.
-    */
+   * Method to start a filter service with a polling consumer.
+   *
+   * @param bootstrapServers The url configuration for each test and it's embedded kafka.
+   */
   def startKafka(bootstrapServers: String): Unit = {
 
     val consumer: FilterService = new FilterService(RedisCache) {
@@ -93,11 +93,11 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
   }
 
   /**
-    * Method to generate a message envelope as expected by the filter service.
-    *
-    * @param payload Payload is a random value if not defined explicitly.
-    * @return
-    */
+   * Method to generate a message envelope as expected by the filter service.
+   *
+   * @param payload Payload is a random value if not defined explicitly.
+   * @return
+   */
   private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
 
     val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
@@ -181,46 +181,54 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     }
 
     /**
-      * Todo: Test to become finished when KafkaExpressApp can handle Future[Failure[Exceptions]]
-      */
-    "pause the consution of new messages when there is an error sending messages" in {
+     * Todo: Test to become finished when KafkaExpressApp can handle Future[Failure[Exceptions]]
+     */
+    "pause the consumption of new messages when there is an error sending messages" in {
 
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
+      val cache = new Cache {
+        var list = List[String]()
+
+        def get(hash: String): Boolean = {
+          list = list :+ hash
+          false
+        }
+
+        def set(hash: String): Boolean = {
+          false
+        }
+      }
+
+      class ExceptionFilterService(cache: Cache) extends FilterService(cache) {
+
+        override val consumerBootstrapServers: String = bootstrapServers
+        override val producerBootstrapServers: String = bootstrapServers
+
+        override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
+          Future {
+            throw new Exception("test exception")
+          }
+        }
+      }
+
       withRunningKafka {
+        val fakeFilterService = new ExceptionFilterService(cache)
+        fakeFilterService.consumption.startPolling()
 
-        val payload = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())
-
-        val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
-        val pm2 = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
-        pm.setSignature(org.bouncycastle.util.Strings.toByteArray("1111"))
-        val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
-        val msgEnvelope1 = MessageEnvelope(pm, ctxt)
-        val msgEnvelope2 = MessageEnvelope(pm2)
-
+        val msgEnvelope1 = generateMessageEnvelope()
+        val msgEnvelope2 = generateMessageEnvelope()
         logger.info("msgEnvelope1.UUID: " + msgEnvelope1.ubirchPacket.getUUID)
         logger.info("msgEnvelope2.UUID: " + msgEnvelope2.ubirchPacket.getUUID)
 
         publishToKafka(Messages.jsonTopic, msgEnvelope1)
-
-        val consumer: FilterService = new FilterService(new CacheMockAlwaysFalse) {
-          override val consumerBootstrapServers: String = bootstrapServers
-          override val producerBootstrapServers: String = bootstrapServers
-
-          override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
-            Future {
-              throw new Exception()
-            }
-          }
-        }
-        consumer.consumption.startPolling()
-
-        Thread.sleep(19000)
         publishToKafka(Messages.jsonTopic, msgEnvelope2)
-        Thread.sleep(30000)
-        assert(0 == 0)
+
+        Thread.sleep(5000)
+        assert(cache.list.head == cache.list(1))
+
       }
     }
   }
