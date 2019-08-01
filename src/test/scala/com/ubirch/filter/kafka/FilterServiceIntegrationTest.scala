@@ -131,7 +131,7 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       }
     }
 
-    "must also detect replay attack when cache is down" in {
+    "also detect replay attack when cache is down" in {
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
@@ -244,6 +244,29 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
          */
         assert(cache.list.last != cache.list(cache.list.size - 2))
 
+      }
+    }
+
+    "forward all messages when activeState equals false" in {
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+
+      withRunningKafka {
+
+        class FakeFilter(cache: Cache) extends FilterService(cache) {
+          override val consumerBootstrapServers: String = bootstrapServers
+          override val producerBootstrapServers: String = bootstrapServers
+          override val filterStateActive = false
+        }
+        val fakeFilter = new FakeFilter(new CacheMockAlwaysFalse)
+        fakeFilter.consumption.startPolling()
+
+        val msgEnvelope = generateMessageEnvelope()
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
+
+        val forwardedMessage = consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
+        forwardedMessage.ubirchPacket.getUUID mustEqual msgEnvelope.ubirchPacket.getUUID
       }
     }
   }

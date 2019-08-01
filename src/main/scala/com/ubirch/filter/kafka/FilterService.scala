@@ -60,6 +60,8 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte], U
   override val consumerTopics: Set[String] = conf.getString("filterService.kafkaApi.kafkaConsumer.topic").split(", ").toSet
   val producerErrorTopic: String = conf.getString("filterService.kafkaApi.kafkaConsumer.errorTopic")
 
+  val filterStateActive: Boolean = conf.getBoolean("filterService.stateActive")
+
   override def consumerBootstrapServers: String = conf.getString("filterService.kafkaApi.kafkaConsumer.bootstrapServers")
 
   override val consumerGroupId: String = conf.getString("filterService.kafkaApi.kafkaConsumer.groupId")
@@ -88,21 +90,24 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte], U
 
         val data = ProcessingData(cr, msgEnvelope.ubirchPacket.getPayload.toString)
 
-        if (cacheContainsHash(data)) {
-          reactOnReplayAttack(cr, msgEnvelope, Messages.foundInCacheMsg)
+        if (!filterStateActive) {
+          forwardUPP(data)
         } else {
-          makeVerificationLookup(data).code match {
-            case StatusCodes.Ok =>
-              reactOnReplayAttack(cr, msgEnvelope, Messages.foundInVerificationMsg)
-            case StatusCodes.NotFound =>
-              forwardUPP(data)
-            case status =>
-              logger.error(s"verification service failure: http-status-code: $status for payload: $data.payload.")
-              Future.failed(NeedForPauseException("error processing data by filter service", s"verification service failure: http-status-code: $status for key: ${data.cr.key()}.", Some(2 seconds)))
+          if (cacheContainsHash(data)) {
+            reactOnReplayAttack(cr, msgEnvelope, Messages.foundInCacheMsg)
+          } else {
+            makeVerificationLookup(data).code match {
+              case StatusCodes.Ok =>
+                reactOnReplayAttack(cr, msgEnvelope, Messages.foundInVerificationMsg)
+              case StatusCodes.NotFound =>
+                forwardUPP(data)
+              case status =>
+                logger.error(s"verification service failure: http-status-code: $status for payload: $data.payload.")
+                Future.failed(NeedForPauseException("error processing data by filter service", s"verification service failure: http-status-code: $status for key: ${data.cr.key()}.", Some(2 seconds)))
+            }
           }
         }
       }.getOrElse(Future.successful(None))
-
 
     }
     Future.sequence(futureResponse).map(_ => ())

@@ -3,6 +3,9 @@ fullname: ubirch.filter-service
 name: filter-service
 image:
   tag: latest
+# only set false in case of running tests with replicated data
+state:
+  active: "true"
 
 # settings for ingest
 keyServiceURL: "key-service-core-demo.core-demo.svc.cluster.local:8095"

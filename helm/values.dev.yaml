@@ -6,6 +6,9 @@ image:
 service:
   type: "NodePort"
   replicaCount: 1
+# only set false in case of running tests with replicated data
+state:
+  active: "true"
 
 redis:
   SSL: "true"
