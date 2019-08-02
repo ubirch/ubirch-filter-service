@@ -11,7 +11,7 @@ state:
   active: "true"
 
 redis:
-  SSL: "true"
+  SSL: "false"
   main:
     host: "redis-stable-master.core-dev.svc.cluster.local"
   replicated:
