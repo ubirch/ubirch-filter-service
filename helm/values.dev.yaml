@@ -33,7 +33,8 @@ kafka:
     URL: "kafka.core-dev.svc.cluster.local:9092"
     errortopic: "com.ubirch.filter.error"
     rejectiontopic: "com.ubirch.filter.rejection"
-    topic: "com.ubirch.eventlog.encoder"
+    topic: "dev.null"
+    #topic: "com.ubirch.eventlog.encoder"
     timeout: 2
 
 metrics:
