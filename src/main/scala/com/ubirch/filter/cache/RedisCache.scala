@@ -40,17 +40,17 @@ object RedisCache extends Cache with LazyLogging {
   private val useReplicated: Boolean = conf.getBoolean("filterService.redis.useReplicated")
   private val cacheName: String = conf.getString("filterService.redis.cacheName")
   var redisConf = new org.redisson.config.Config()
-  private val useSSH = if (conf.getBoolean("filterService.redis.ssl")) "rediss://" else "redis://"
+  private val prefix = "redis://"
 
   /**
     * Uses replicated redis server, when used in dev/prod environment.
     */
   if (useReplicated) {
-    val mainNode = useSSH ++ conf.getString("filterService.redis.mainHost") ++ ":" ++ port
-    val replicatedNode = useSSH ++ conf.getString("filterService.redis.replicatedHost") ++ ":" ++ port
+    val mainNode = prefix ++ conf.getString("filterService.redis.mainHost") ++ ":" ++ port
+    val replicatedNode = prefix ++ conf.getString("filterService.redis.replicatedHost") ++ ":" ++ port
     redisConf.useReplicatedServers().addNodeAddress(mainNode, replicatedNode).setPassword(evaluatedPW)
   } else {
-    val singleNode: String = useSSH ++ conf.getString("filterService.redis.host") ++ ":" ++ port
+    val singleNode: String = prefix ++ conf.getString("filterService.redis.host") ++ ":" ++ port
     redisConf.useSingleServer().setAddress(singleNode).setPassword(evaluatedPW)
   }
 

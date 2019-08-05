@@ -71,7 +71,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte], U
   override val valueDeserializer: Deserializer[Array[Byte]] = new ByteArrayDeserializer
   private val ubirchEnvironment = conf.getString("filterService.verification.environment")
 
-  implicit val formats: Formats = com.ubirch.kafka.formats
+  implicit val formats: Formats = formats
   implicit val backend: SttpBackend[Id, Nothing] = HttpURLConnectionBackend()
 
   /**

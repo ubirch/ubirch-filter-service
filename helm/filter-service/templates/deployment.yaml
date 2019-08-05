@@ -69,8 +69,6 @@ spec:
               value: "{{ .Values.kafka.producer.timeout }}"
             - name: FILTER_ENV_METRICS_PROMETHEUS_PORT
               value: "{{ .Values.metrics.prometheus.port }}"
-            - name: FILTER_ENV_REDIS_SSL
-              value: "{{ .Values.redis.SSL }}"
             - name: FILTER_ENV_REDIS_MAIN_HOST
               value: "{{ .Values.redis.main.host }}"
             - name: FILTER_ENV_REDIS_REPLICATED_HOST

@@ -15,31 +15,14 @@ service:
   type: "NodePort"
   replicaCount: "1"
 
-ingress:
-  enabled: true
-  annotations:
-    certmanager.k8s.io/acme-challenge-type: "dns01"
-    certmanager.k8s.io/cluster-issuer: "letsencrypt-demo"
-    certmanager.k8s.io/acme-dns01-provider: "demo-dns-demo-ubirch-com"
-    kubernetes.io/ingress.allow-http: "false"
-  path: /
-  hosts:
-    - demo.ubirch.com
-  tls:
-    - secretName: filter-demo-ubirch-com-certificate
-      hosts:
-        - filter.demo.ubirch.com
-
 redis:
-  masterURL: "redis-stable-master.core-demo.svc.cluster.local:6379"
-  slaveURL: "redis-stable-slave.core-demo.svc.cluster.local:6379"
-  #not using master and slave till now, should I?
-  SSL: "true"
-  host: ""
-  # This port should be the ssl or non-ssl port depending on the value of the key "SSL"
-  port: ""
+  main:
+    host: "redis-stable-master.core-demo.svc.cluster.local"
+  replicated:
+    host: "redis-stable-slave.core-demo.svc.cluster.local"
+  port: "6379"
   pw: "redis-secrets-avatar"
-  usecluster: ""
+  usereplicated: "true"
   name: "hashes_payload"
 
 kafka:
