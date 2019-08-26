@@ -140,7 +140,18 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte], U
   }
 
   /**
-   * Method that checks the cache regarding earlier processing of a message with the same
+   * Method that checks the cache regarding earlier processing of a message with the same{
+   * *
+   * implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
+   * val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
+   * send(Messages.rejectionTopic, rj.toString.getBytes())
+   * .recoverWith {
+   * case _ => send(Messages.rejectionTopic, rj.toString.getBytes())
+   * }.recoverWith { case ex: Exception =>
+   * pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${Messages.rejectionTopic}", cr, ex, 2 seconds)
+   * }.map { x => Some(x) }
+   * }
+   *
    * hash/payload and publishes and logs error messages in case of failure.
    *
    * @param data The data to become processed.
@@ -255,7 +266,7 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte], U
 
     logger.error(errorMessage, ex.getMessage, ex)
     send(Messages.errorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString).toString.getBytes)
-      .recover { case _ => logger.info(s"failure publishing to error topic: $errorMessage") }
+      .recover { case _ => logger.error(s"failure publishing to error topic: $errorMessage") }
   }
 
   /**

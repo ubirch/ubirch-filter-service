@@ -16,8 +16,6 @@
 
 package com.ubirch.filter.kafka
 
-class ConsumerTest
-
 import java.util.concurrent.TimeoutException
 import java.util.{Base64, UUID}
 
