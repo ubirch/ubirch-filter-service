@@ -27,8 +27,8 @@ import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse, RedisCache}
 import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
 import com.ubirch.filter.util.Messages
 import com.ubirch.kafka.MessageEnvelope
+import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
-import com.ubirch.util.PortGiver
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
@@ -37,10 +37,12 @@ import org.json4s.JsonAST._
 import org.scalatest.{BeforeAndAfter, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.language.postfixOps
-import scala.sys.process._
+import os.proc
+
+import scala.util.Try
+
 
 /**
  * This class provides all integration tests, except for those testing a missing redis connection on startup.
@@ -61,12 +63,23 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
    */
   before {
     try {
-      "fuser -k 6379/tcp" !!
+      val embeddedRedisPid = getRedisPid(6379)
+      proc("kill", "-9", embeddedRedisPid).call()
     } catch {
       case _: Throwable =>
     }
     redis = new RedisServer(6379)
+    Thread.sleep(1000)
     redis.start()
+  }
+
+  private def getRedisPid(port: Int) = {
+    proc("lsof", "-t", "-i", s":$port", "-s", "TCP:LISTEN").call().chunks.iterator
+      .collect {
+        case Left(s) => s
+        case Right(s) => s
+      }
+      .map(x => new String(x.array)).map(_.trim.toInt).toList.head
   }
 
   /**
@@ -88,6 +101,33 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       override val producerBootstrapServers: String = bootstrapServers
     }
     consumer.consumption.startPolling()
+  }
+
+  object KafkaForTest {
+    var consumer: Option[FilterService] = None
+
+    def startKafka(bootstrapServers: String): Unit = {
+      consumer match {
+        case None => consumer = Some(new FilterService(RedisCache) {
+          override val consumerBootstrapServers: String = bootstrapServers
+          override val producerBootstrapServers: String = bootstrapServers
+        })
+          //consumer.get.consumption.setForceExit(true)
+          consumer.get.consumption.startPolling()
+        case Some(value) =>
+      }
+    }
+
+    def stopKafka = {
+      consumer match {
+        case Some(consum) =>
+          //consum.consumption.setForceExit(true)
+          logger.info("$$$ - shutting down kafka")
+          consum.consumption.setForceExit(true)
+          //consum.consumption.shutdown(1000, TimeUnit.MILLISECONDS)
+        case None =>
+      }
+    }
   }
 
   /**
@@ -112,11 +152,13 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       withRunningKafka {
-
+        Thread.sleep(1000)
         val msgEnvelope = generateMessageEnvelope()
         //publish message first time
         publishToKafka(Messages.jsonTopic, msgEnvelope)
-        startKafka(bootstrapServers)
+        Thread.sleep(1000)
+        KafkaForTest.startKafka(bootstrapServers)
+        Thread.sleep(1000)
         consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
 
@@ -126,6 +168,7 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
         rejection.message mustBe Messages.foundInCacheMsg
         rejection.rejectionName mustBe Messages.replayAttackName
+        Try(KafkaForTest.stopKafka)
       }
     }
 
@@ -133,8 +176,10 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+      Thread.sleep(1000)
 
       withRunningKafka {
+        Thread.sleep(1000)
 
         class FakeFilter(cache: Cache) extends FilterService(cache) {
           override val consumerBootstrapServers: String = bootstrapServers
@@ -146,6 +191,7 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         }
         val fakeFilter = new FakeFilter(new CacheMockAlwaysFalse)
         fakeFilter.consumption.startPolling()
+        Thread.sleep(1000)
 
         val msgEnvelope = generateMessageEnvelope()
         publishToKafka(Messages.jsonTopic, msgEnvelope)
@@ -153,6 +199,7 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
         rejection.message mustBe Messages.foundInVerificationMsg
         rejection.rejectionName mustBe Messages.replayAttackName
+
       }
     }
 
@@ -160,13 +207,17 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+      Thread.sleep(1000)
 
       withRunningKafka {
+        Thread.sleep(1000)
 
         implicit val serializer: Serializer[String] = new org.apache.kafka.common.serialization.StringSerializer()
 
         publishToKafka[String](Messages.jsonTopic, "unparseable example message")
         startKafka(bootstrapServers)
+        Thread.sleep(1000)
+
         val message: FilterError = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
         message.serviceName mustBe "filter-service"
         message.exceptionName mustBe "JsonParseException"

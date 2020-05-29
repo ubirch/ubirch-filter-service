@@ -33,9 +33,9 @@ import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
+import com.ubirch.filter.util.ExecutionContextHelper
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Success
@@ -54,6 +54,16 @@ case class ProcessingData(cr: ConsumerRecord[String, Array[Byte]], payload: Stri
  */
 class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte], Unit] {
 
+  override val prefix: String = "Ubirch"
+
+  override implicit val ec: ExecutionContext = ExecutionContextHelper.ec
+
+  override val maxTimeAggregationSeconds: Long = 180
+  override val lingerMs: Int = conf.getInt("filterService.kafkaApi.kafkaProducer.lingerMS")
+  override val consumerReconnectBackoffMsConfig: Long = conf.getLong("filterService.kafkaApi.kafkaConsumer.reconnectBackoffMsConfig")
+  override val consumerReconnectBackoffMaxMsConfig: Long = conf.getLong("filterService.kafkaApi.kafkaConsumer.reconnectBackoffMaxMsConfig")
+  override val metricsSubNamespace: String = conf.getString("filterService.metrics.prometheus.namespace")
+
   override val producerBootstrapServers: String = conf.getString("filterService.kafkaApi.kafkaProducer.bootstrapServers")
   override val keySerializer: serialization.Serializer[String] = new StringSerializer
   override val valueSerializer: serialization.Serializer[Array[Byte]] = new ByteArraySerializer
@@ -71,22 +81,18 @@ class FilterService(cache: Cache) extends ExpressKafkaApp[String, Array[Byte], U
   override val valueDeserializer: Deserializer[Array[Byte]] = new ByteArrayDeserializer
   private val ubirchEnvironment = conf.getString("filterService.verification.environment")
 
-  implicit val formats: Formats = formats
+  implicit val formats: Formats = com.ubirch.kafka.formats
   implicit val backend: SttpBackend[Id, Nothing] = HttpURLConnectionBackend()
 
   /**
    * Method that processes all consumer records of the incoming batch (Kafka message).
-   *
-   * @param consumerRecords an entry of the incoming Kafka message
    */
+  override val process: Process = { crs =>
 
-  override def process(consumerRecords: Vector[ConsumerRecord[String, Array[Byte]]]): Future[Unit] = {
-
-
-    val futureResponse = consumerRecords.map { cr =>
+    val futureResponse = crs.map { cr =>
       logger.debug("consumer record received with key: " + cr.key())
 
-      extractData(cr).map { msgEnvelope =>
+      extractData(cr).map { msgEnvelope: MessageEnvelope =>
 
         val data = ProcessingData(cr, msgEnvelope.ubirchPacket.getPayload.toString)
 

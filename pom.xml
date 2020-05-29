@@ -94,8 +94,23 @@
 
         <dependency>
             <groupId>com.ubirch</groupId>
-            <artifactId>event-log-kafka</artifactId>
-            <version>1.2.4-SNAPSHOT</version>
+            <artifactId>ubirch-kafka-express</artifactId>
+            <version>1.2.11-SNAPSHOT</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk15on -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk15on</artifactId>
+            <version>1.65.01</version>
+        </dependency>
+
+
+        <!-- https://mvnrepository.com/artifact/com.lihaoyi/os-lib -->
+        <dependency>
+            <groupId>com.lihaoyi</groupId>
+            <artifactId>os-lib_2.12</artifactId>
+            <version>0.7.0</version>
         </dependency>
 
         <dependency>

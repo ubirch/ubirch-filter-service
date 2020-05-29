@@ -18,8 +18,12 @@ package com.ubirch.filter
 
 import com.ubirch.filter.cache.RedisCache
 import com.ubirch.filter.kafka.FilterService
-import com.ubirch.filter.metrics.PrometheusMetrics
+import com.ubirch.filter.util.ExecutionContextHelper
+
+import scala.concurrent.ExecutionContext
+
 
 object Boot extends FilterService(RedisCache) {
-  val prometheus = new PrometheusMetrics()
+  override implicit val ec: ExecutionContext = ExecutionContextHelper.ec
+
 }

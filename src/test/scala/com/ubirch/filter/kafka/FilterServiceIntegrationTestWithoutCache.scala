@@ -26,7 +26,7 @@ import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection,
 import com.ubirch.filter.util.Messages
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.protocol.ProtocolMessage
-import com.ubirch.util.PortGiver
+import com.ubirch.kafka.util.PortGiver
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.JsonAST.{JObject, JString}
@@ -157,7 +157,7 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
   private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
 
     val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
-    pm.setSignature(org.bouncycastle.util.Strings.toByteArray("1111"))
+    pm.setSignature("1111".getBytes())
     val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
     MessageEnvelope(pm, ctxt)
   }
