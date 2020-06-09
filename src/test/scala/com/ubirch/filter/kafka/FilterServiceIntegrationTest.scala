@@ -34,8 +34,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.JsonAST._
-import org.scalatest.{BeforeAndAfter, MustMatchers, WordSpec}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
+import io.prometheus.client.CollectorRegistry
 
 import scala.concurrent.Future
 import scala.language.postfixOps
@@ -48,7 +49,7 @@ import scala.util.Try
  * This class provides all integration tests, except for those testing a missing redis connection on startup.
  * The Kafka config has to be inside each single test to enable parallel testing with different ports.
  */
-class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
+class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter with BeforeAndAfterEach {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -89,6 +90,9 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     redis.stop()
   }
 
+  override protected def beforeEach() = {
+    CollectorRegistry.defaultRegistry.clear()
+  }
   /**
    * Method to start a filter service with a polling consumer.
    *

@@ -27,21 +27,26 @@ import com.ubirch.filter.util.Messages
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.protocol.ProtocolMessage
 import com.ubirch.kafka.util.PortGiver
+import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.JsonAST.{JObject, JString}
-import org.scalatest.{BeforeAndAfter, MustMatchers, WordSpec}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach, MustMatchers, WordSpec}
 import redis.embedded.RedisServer
 
 import scala.language.postfixOps
 import scala.sys.process._
 
-class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter {
+class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter with BeforeAndAfterEach {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
   implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
   implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
+
+  override protected def beforeEach(): Unit = {
+    CollectorRegistry.defaultRegistry.clear()
+  }
 
   var redis: RedisServer = _
 
