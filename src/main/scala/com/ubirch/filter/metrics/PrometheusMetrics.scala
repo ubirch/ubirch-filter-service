@@ -18,12 +18,15 @@ package com.ubirch.filter.metrics
 
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
+import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.metrics.PrometheusMetricsHelper
 import io.prometheus.client.exporter.HTTPServer
+import javax.inject.{Inject, Singleton}
 
 import scala.concurrent.Future
 
-class PrometheusMetrics() extends LazyLogging {
+@Singleton
+class PrometheusMetrics @Inject() (lifecycle: Lifecycle) extends LazyLogging {
 
   def conf: Config = ConfigFactory.load()
 
@@ -33,13 +36,9 @@ class PrometheusMetrics() extends LazyLogging {
 
   val server: HTTPServer = PrometheusMetricsHelper.create(port)
 
-  Runtime.getRuntime.addShutdownHook(new Thread() {
-    override def run(): Unit = {
-      logger.info("Shutting down Prometheus")
-      Future.successful(server.stop())
-      Thread.sleep(1000) //Waiting 1 secs
-      logger.info("Bye bye, see you later...")
-    }
-  })
+  lifecycle.addStopHook { () =>
+    logger.info("Shutting down Prometheus")
+    Future.successful(server.stop())
+  }
 
 }

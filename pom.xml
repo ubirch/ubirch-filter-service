@@ -65,6 +65,8 @@
         <scala.version>2.12.6</scala.version>
         <scala.compat.version>2.12</scala.compat.version>
         <io.monix.version>2.3.2</io.monix.version>
+        <guice.version>4.1.0</guice.version>
+        <embedded-cassandra-test>1.2.9</embedded-cassandra-test>
 
         <!-- plugins -->
         <scala-maven-plugin.version>3.3.2</scala-maven-plugin.version>
@@ -98,6 +100,30 @@
             <version>1.2.11-SNAPSHOT</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.ubirch</groupId>
+            <artifactId>event-log-util</artifactId>
+            <version>1.2.5-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.ubirch</groupId>
+            <artifactId>ubirch-crypto</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.inject</groupId>
+            <artifactId>guice</artifactId>
+            <version>${guice.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.nosan</groupId>
+            <artifactId>embedded-cassandra-test</artifactId>
+            <version>${embedded-cassandra-test}</version>
+        </dependency>
+
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk15on -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
@@ -111,6 +137,19 @@
             <version>0.9.0</version>
         </dependency>
 
+
+        <!-- https://mvnrepository.com/artifact/io.getquill/quill-cassandra-monix -->
+        <dependency>
+            <groupId>io.getquill</groupId>
+            <artifactId>quill-cassandra-monix_${scala.compat.version}</artifactId>
+            <version>3.4.10</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.getquill</groupId>
+            <artifactId>quill-cassandra_${scala.compat.version}</artifactId>
+            <version>3.4.10</version>
+        </dependency>
 
         <!-- https://mvnrepository.com/artifact/com.lihaoyi/os-lib -->
         <dependency>

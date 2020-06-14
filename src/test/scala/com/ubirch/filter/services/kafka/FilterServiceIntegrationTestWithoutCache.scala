@@ -14,16 +14,21 @@
  * limitations under the License.
  */
 
-package com.ubirch.filter.kafka
+package com.ubirch.filter.services.kafka
 
 import java.util.concurrent.TimeoutException
 import java.util.{Base64, UUID}
 
 import com.github.sebruck.EmbeddedRedis
+import com.google.inject.binder.ScopedBindingBuilder
+import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.cache.RedisCache
 import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
+import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.util.Messages
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
+import com.ubirch.filter.{Binder, InjectorHelper}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.protocol.ProtocolMessage
 import com.ubirch.kafka.util.PortGiver
@@ -44,19 +49,64 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
   implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
   implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
 
+
+  /**
+    * Overwrite default bootstrap server and topic values of the kafka consumer and producers
+    */
+  def customTestConfigProvider(bootstrapServers: String, consumerTopic: String): ConfigProvider = new ConfigProvider {
+    override def conf: Config = super.conf.withValue(
+      ConsumerConfPaths.BOOTSTRAP_SERVERS,
+      ConfigValueFactory.fromAnyRef(bootstrapServers)
+    ).withValue(
+      ProducerConfPaths.BOOTSTRAP_SERVERS,
+      ConfigValueFactory.fromAnyRef(bootstrapServers)
+    ).withValue(
+      ConsumerConfPaths.TOPICS,
+      ConfigValueFactory.fromAnyRef(consumerTopic)
+    )
+  }
+
+  /**
+  * Simple Guice injector that mimicate the default one but replace the bootstrap and consumer topics by the provided one
+    */
+  def FakeSimpleInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
+    override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
+  })) {}
+
   override protected def beforeEach(): Unit = {
+    //cleanAllKafka()
     CollectorRegistry.defaultRegistry.clear()
+    EmbeddedKafka.stop()
+    EmbeddedKafka.stopZooKeeper()
+    EmbeddedKafka.deleteTopics(List(Messages.jsonTopic, Messages.encodingTopic))
+    logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
+  }
+
+  override protected def afterEach(): Unit = {
+    EmbeddedKafka.stop()
+    logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
+  }
+
+  def cleanAllKafka(): Unit = {
+    try {
+      for (i <- 2 to 9) {
+        s"fuser -k 909$i/tcp" !
+      }
+      logger.info("just killed all tcp things on 9092 -> 9099")
+    } catch {
+      case _: Throwable =>
+        logger.info("error killing kafka")
+    }
   }
 
   var redis: RedisServer = _
 
-  def startKafka(bootstrapServers: String): Unit = {
+  def startKafka(bootstrapServers: String): FilterService = {
 
-    val consumer: FilterService = new FilterService(RedisCache) {
-      override val consumerBootstrapServers: String = bootstrapServers
-      override val producerBootstrapServers: String = bootstrapServers
-    }
+    val Injector = FakeSimpleInjector(bootstrapServers, Messages.jsonTopic)
+    val consumer = Injector.get[DefaultFilterService]
     consumer.consumption.startPolling()
+    consumer
   }
 
   "Missing redis connection" must {

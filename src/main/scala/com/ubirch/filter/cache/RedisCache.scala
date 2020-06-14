@@ -20,17 +20,21 @@ import java.net.UnknownHostException
 
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
-import monix.execution.Scheduler.{global => scheduler}
+import com.ubirch.filter.services.Lifecycle
+import javax.inject.{Inject, Singleton}
+import monix.execution.Scheduler
 import org.redisson.Redisson
-import org.redisson.api.{RMap, RedissonClient}
+import org.redisson.api.{RedissonClient, RMap}
 
 import scala.concurrent.duration._
+import scala.concurrent.Future
 
 /**
   * Cache implementation for redis with a Map that stores the
   * payload/hash as a key and a boolean as the value that is always true
   */
-object RedisCache extends Cache with LazyLogging {
+@Singleton
+class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler) extends Cache with LazyLogging {
 
   def conf: Config = ConfigFactory.load()
 
@@ -111,13 +115,9 @@ object RedisCache extends Cache with LazyLogging {
     cache.put(hash, true)
   }
 
-  Runtime.getRuntime.addShutdownHook(new Thread() {
-    override def run(): Unit = {
+  lifecycle.addStopHook { () =>
+    logger.info("Shutting down Redis: " + cacheName)
+    Future.successful(redisson.shutdown())
+  }
 
-      logger.info("Shutting down Redis: " + cacheName)
-      redisson.shutdown()
-      Thread.sleep(1000) //Waiting 1 secs
-      logger.info("Bye bye, see you later...")
-    }
-  })
 }
