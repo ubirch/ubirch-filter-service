@@ -25,11 +25,11 @@ import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
-import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse}
-import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer, Values}
+import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
+import com.ubirch.filter.model._
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.util.Messages
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
 import com.ubirch.filter.model.eventlog.{CassandraFinder, Finder}
 import com.ubirch.filter.models.CassandraFinderAlwaysFound
 import com.ubirch.filter.services.Lifecycle
@@ -47,8 +47,8 @@ import org.scalatest._
 import os.proc
 import redis.embedded.RedisServer
 
-import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration._
 import scala.language.postfixOps
 
 
@@ -292,8 +292,21 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       def FakeInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterDoesNothing])
+        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(new ConfigProvider {
+          override def conf: Config = super.conf.withValue(
+            ConsumerConfPaths.BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            ProducerConfPaths.BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            ConsumerConfPaths.TOPICS,
+            ConfigValueFactory.fromAnyRef(consumerTopic)
+          ).withValue(
+            FilterConfPaths.FILTER_STATE,
+            ConfigValueFactory.fromAnyRef(false)
+          )
+        })
       })) {}
 
 
@@ -301,14 +314,64 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
         val Injector = FakeInjector(bootstrapServers, Messages.jsonTopic)
 
-        val fakeFilter = Injector.get[FakeFilterDoesNothing]
-        fakeFilter.consumption.startPolling()
+        val filter = Injector.get[AbstractFilterService]
+        filter.consumption.startPolling()
 
         val msgEnvelope = generateMessageEnvelope()
         publishToKafka(Messages.jsonTopic, msgEnvelope)
 
         val forwardedMessage = consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
         forwardedMessage.ubirchPacket.getUUID mustEqual msgEnvelope.ubirchPacket.getUUID
+      }
+    }
+
+    /**
+    * Here we set the filter state to non active (should always forward the message) BUT the env = prod, so it should
+      * still check if redis / cassi is up or not and forward accordingly
+      */
+    "not forward all messages when activeState equals false and env = prod" in {
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+
+      def FakeInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(new ConfigProvider {
+          override def conf: Config = super.conf.withValue(
+            ConsumerConfPaths.BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            ProducerConfPaths.BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            ConsumerConfPaths.TOPICS,
+            ConfigValueFactory.fromAnyRef(consumerTopic)
+          ).withValue(
+            FilterConfPaths.ENVIRONMENT,
+            ConfigValueFactory.fromAnyRef(Values.PRODUCTION_NAME)
+          ).withValue(
+            FilterConfPaths.FILTER_STATE,
+            ConfigValueFactory.fromAnyRef(false)
+          )
+        })
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
+      })) {}
+
+
+      withRunningKafka {
+
+        val Injector = FakeInjector(bootstrapServers, Messages.jsonTopic)
+
+        val filter = Injector.get[AbstractFilterService]
+        filter.consumption.startPolling()
+
+        val msgEnvelope = generateMessageEnvelope()
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
+
+        Thread.sleep(1000)
+
+        val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
+        rejection.message mustBe Messages.foundInCacheMsg
+        rejection.rejectionName mustBe Messages.replayAttackName
       }
     }
   }
@@ -471,11 +534,4 @@ class CustomCache extends Cache {
   }
 }
 
-/**
-*   Fake filter that has the filterStateActive set to true. Should always forward the messages
-  * @param cache The cache used to check if a message has already been received before.
-  */
-@Singleton
-class FakeFilterDoesNothing @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, cassandraFinder, config, lifecycle) {
-  override val filterStateActive = false
-}
+

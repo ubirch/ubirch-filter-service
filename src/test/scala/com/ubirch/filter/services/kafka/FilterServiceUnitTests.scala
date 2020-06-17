@@ -16,16 +16,14 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.concurrent.TimeUnit
-
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
 import com.ubirch.filter.cache.{Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
+import com.ubirch.filter.model.eventlog.CassandraFinder
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.util.Messages
-import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
-import com.ubirch.filter.model.eventlog.{CassandraFinder, EventLogRow}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.consumer.ConsumerRunner
 import com.ubirch.kafka.producer.ProducerRunner
@@ -35,11 +33,11 @@ import javax.inject.{Inject, Singleton}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.json4s.JObject
-import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
+import org.scalatest.mockito.MockitoSugar
 
-import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.Duration
 
 /**
   * This class provides unit tests for most methods of the filter service.
@@ -117,7 +115,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
 
       val fakeFilter = Injector.get[FakeFilterService]
       val data = ProcessingData(mock[ConsumerRecord[String, Array[Byte]]], "")
-      val result = fakeFilter.makeVerificationLookup(data)
+      fakeFilter.makeVerificationLookup(data)
       //assert(result.code == StatusCodes.Ok)
     }
 

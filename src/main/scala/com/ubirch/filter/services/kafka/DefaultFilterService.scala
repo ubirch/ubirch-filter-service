@@ -23,7 +23,7 @@ import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.cache.{Cache, NoCacheConnectionException}
-import com.ubirch.filter.model.{FilterError, Rejection}
+import com.ubirch.filter.model.{FilterError, Rejection, Values}
 import com.ubirch.filter.model.eventlog.{EventLogRow, Finder}
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.util.Messages
@@ -40,7 +40,7 @@ import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
 
 import scala.collection.immutable
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Success
@@ -176,7 +176,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
 
         val data = ProcessingData(cr, msgEnvelope.ubirchPacket.getPayload.toString)
 
-        if (!filterStateActive) {
+        if (!filterStateActive && ubirchEnvironment != Values.PRODUCTION_NAME) {
           forwardUPP(data)
         } else {
           if (cacheContainsHash(data)) {
