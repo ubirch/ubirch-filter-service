@@ -2,8 +2,6 @@ package com.ubirch.filter.model.eventlog
 
 import java.util.Locale
 
-import com.ubirch.filter.util.EventLogJsonSupport
-
 import scala.collection.immutable.{TreeMap, TreeSet}
 
 case class Headers(protected var _headers: Seq[(String, String)]) {

@@ -1,5 +1,6 @@
 package com.ubirch.filter.model.eventlog
 
+
 import com.ubirch.filter.services.cluster.ConnectionService
 import io.getquill.{CassandraAsyncContext, SnakeCase}
 import javax.inject._

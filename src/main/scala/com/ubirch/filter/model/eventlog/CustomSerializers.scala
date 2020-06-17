@@ -3,10 +3,12 @@ package com.ubirch.filter.model.eventlog
 import java.util.Date
 
 import com.ubirch.filter.util.EventLogJsonSupport._
+import org.json4s.{CustomSerializer, JObject, JValue, MappingException}
 import org.json4s.JsonDSL._
-import org.json4s.{ CustomSerializer, JObject, JValue, MappingException }
 
 import scala.util.control.NonFatal
+
+
 
 /**
   * Object that contains all customized serializers

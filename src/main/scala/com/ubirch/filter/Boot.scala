@@ -21,7 +21,6 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.metrics.PrometheusMetrics
 
 import scala.reflect.ClassTag
-import scala.util.Try
 
 /**
   * Helper to manage Guice Injection.
@@ -40,8 +39,6 @@ abstract class InjectorHelper(val modules: List[Module]) extends LazyLogging {
     }
   }
 
-  def getAsOption[T](implicit ct: ClassTag[T]): Option[T] = Option(get(ct))
-
   def get[T](implicit ct: ClassTag[T]): T = get(ct.runtimeClass.asInstanceOf[Class[T]])
 
   def get[T](clazz: Class[T]): T = {
@@ -53,8 +50,6 @@ abstract class InjectorHelper(val modules: List[Module]) extends LazyLogging {
         throw InjectionException(e.getMessage)
     }
   }
-
-  def getAsTry[T](implicit ct: ClassTag[T]): Try[T] = Try(get(ct))
 
 }
 
@@ -85,7 +80,6 @@ trait WithPrometheusMetrics {
 
 /**
   * Represents an assembly for the boot process
-  * @param modules
   */
 abstract class Boot(modules: List[Module]) extends InjectorHelper(modules) with WithPrometheusMetrics {
   def *[T](block: => T): Unit =

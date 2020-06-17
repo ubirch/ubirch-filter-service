@@ -1,9 +1,7 @@
 package com.ubirch.filter.model.eventlog
 
-import java.util.{Date, UUID}
+import java.util.Date
 
-import com.ubirch.filter.util.{EventLogJsonSupport, SigningHelper, UUIDHelper}
-import com.ubirch.filter.util.UUIDHelper._
 import org.json4s.JValue
 
 /**

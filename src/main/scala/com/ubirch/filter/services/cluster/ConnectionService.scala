@@ -5,7 +5,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.CassandraClusterConfPaths
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.util.Exceptions.NoKeyspaceException
-import io.getquill.{CassandraAsyncContext, CassandraStreamContext, NamingStrategy, SnakeCase}
+import io.getquill.{CassandraAsyncContext, NamingStrategy, SnakeCase}
 import javax.inject._
 
 import scala.concurrent.Future
