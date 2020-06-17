@@ -16,39 +16,49 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.concurrent.TimeoutException
 import java.util.{Base64, UUID}
+import java.util.concurrent.TimeoutException
 
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.cache.RedisCache
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.util.Messages
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
-import com.ubirch.filter.{Binder, InjectorHelper}
 import com.ubirch.kafka.MessageEnvelope
-import com.ubirch.protocol.ProtocolMessage
 import com.ubirch.kafka.util.PortGiver
+import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.JsonAST.{JObject, JString}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach, MustMatchers, WordSpec}
+import org.scalatest.BeforeAndAfter
+import os.proc
 import redis.embedded.RedisServer
 
 import scala.language.postfixOps
 import scala.sys.process._
 
-class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter with BeforeAndAfterEach {
+class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
   implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
   implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
 
+
+  override protected def beforeAll(): Unit = {
+    startCassandra()
+    cassandra.executeScripts(eventLogCreationCassandraStatement)
+  }
+
+  override def afterAll(): Unit = {
+    stopCassandra()
+    Thread.sleep(5000)
+  }
 
   /**
     * Overwrite default bootstrap server and topic values of the kafka consumer and producers
@@ -80,23 +90,16 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
     EmbeddedKafka.stopZooKeeper()
     EmbeddedKafka.deleteTopics(List(Messages.jsonTopic, Messages.encodingTopic))
     logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
+    try {
+      redis.stop()
+    } catch {
+      case _: Throwable =>
+    }
   }
 
   override protected def afterEach(): Unit = {
     EmbeddedKafka.stop()
     logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
-  }
-
-  def cleanAllKafka(): Unit = {
-    try {
-      for (i <- 2 to 9) {
-        s"fuser -k 909$i/tcp" !
-      }
-      logger.info("just killed all tcp things on 9092 -> 9099")
-    } catch {
-      case _: Throwable =>
-        logger.info("error killing kafka")
-    }
   }
 
   var redis: RedisServer = _
@@ -112,6 +115,7 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
   "Missing redis connection" must {
 
     "should cause error messages" in {
+      logger.info("EHHHHH should cause error messages")
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
@@ -119,7 +123,8 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
       withRunningKafka {
 
         try {
-          "fuser -k 6379/tcp" !
+          val embeddedRedisPid = getPidOfServiceUsingGivenPort(6379)
+          proc("kill", "-9", embeddedRedisPid).call()
         } catch {
           case _: Throwable =>
         }
@@ -130,6 +135,8 @@ class FilterServiceIntegrationTestWithoutCache extends WordSpec with EmbeddedKaf
 
         //publish message first time
         publishToKafka(Messages.jsonTopic, msgEnvelope)
+
+        Thread.sleep(3000)
 
         consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID

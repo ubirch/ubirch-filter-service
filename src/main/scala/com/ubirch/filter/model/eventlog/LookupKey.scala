@@ -24,14 +24,3 @@ case class LookupKey(name: String, category: String, key: Key, value: Seq[Value]
   def nameAsKeyLabel: LookupKey = withKeyLabel(name)
 
 }
-
-object LookupKey {
-
-  implicit class Helpers(name: String) {
-    def asKey: Key = Key(name, None)
-    def asKeyWithLabel(label: String): Key = Key(name, Option(label))
-    def asValue: Value = Value(name, None, Map.empty)
-    def asValueWithLabel(label: String): Value = Value(name, Option(label), Map.empty)
-  }
-
-}

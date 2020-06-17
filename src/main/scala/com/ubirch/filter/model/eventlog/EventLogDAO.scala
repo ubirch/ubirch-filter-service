@@ -31,7 +31,7 @@ trait EventLogQueries extends TablePointer[EventLogRow] with CustomEncodings[Eve
   * @param ec Represent the execution context for asynchronous processing.
   */
 @Singleton
-class Events @Inject() (val connectionService: ConnectionService)(implicit val ec: ExecutionContext) extends EventLogQueries {
+class EventsDAO @Inject()(val connectionService: ConnectionService)(implicit val ec: ExecutionContext) extends EventLogQueries {
 
   val db: CassandraAsyncContext[SnakeCase.type] = connectionService.context
 
@@ -39,24 +39,5 @@ class Events @Inject() (val connectionService: ConnectionService)(implicit val e
 
   //These actually run the queries.
   def byIdAndCat(id: String, category: String): Future[List[EventLogRow]] = run(byIdAndCatQ(id, category))
-
-}
-
-@Singleton
-class EventsDAO @Inject() (val events: Events, val lookups: Lookups)(implicit val ec: ExecutionContext) {
-
-  def eventLogRowByLookupValueAndCategory(value: String, category: String): Future[Seq[EventLogRow]] = {
-
-    lookups.byValueAndCategory(value, category)
-      .flatMap { x =>
-        Future.sequence {
-          x.distinct.map { y =>
-            events.byIdAndCat(y.key, y.name)
-          }
-
-        }.map(_.flatten)
-
-      }
-  }
 
 }

@@ -16,16 +16,16 @@
 
 package com.ubirch.filter.services.kafka
 
+import java.util.concurrent.TimeUnit
+
 import com.google.inject.binder.ScopedBindingBuilder
-import com.softwaremill.sttp.testing.SttpBackendStub
-import com.softwaremill.sttp.{Id, StatusCodes}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.cache.{Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.util.Messages
-import com.ubirch.filter.{Binder, InjectorHelper}
-import com.ubirch.filter.model.eventlog.CassandraFinder
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
+import com.ubirch.filter.model.eventlog.{CassandraFinder, EventLogRow}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.consumer.ConsumerRunner
 import com.ubirch.kafka.producer.ProducerRunner
@@ -36,7 +36,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.json4s.JObject
 import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{MustMatchers, WordSpec}
+import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -44,7 +44,17 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 /**
   * This class provides unit tests for most methods of the filter service.
   */
-class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatchers with LazyLogging {
+class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatchers with LazyLogging with EmbeddedCassandra with BeforeAndAfterAll {
+
+  override protected def beforeAll(): Unit = {
+    startCassandra()
+    cassandra.executeScripts(eventLogCreationCassandraStatement)
+  }
+
+  override def afterAll(): Unit = {
+    stopCassandra()
+  }
+
 
   val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "1234", "false".getBytes)
   val data = ProcessingData(cr, "")
@@ -89,11 +99,11 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      implicit val stub: SttpBackendStub[Id, Nothing] = SttpBackendStub.synchronous
-        .whenRequestMatches(_ => true)
-        .thenRespondNotFound()
       val data = ProcessingData(mock[ConsumerRecord[String, Array[Byte]]], "")
-      val result = fakeFilter.makeVerificationLookup(data)
+      import scala.concurrent.duration._
+      val result = Await.result(fakeFilter.makeVerificationLookup(data), 5.seconds)
+      result mustBe None
+
       //assert(result.code == StatusCodes.NotFound)
     }
 
@@ -106,9 +116,6 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      implicit val stub: SttpBackendStub[Id, Nothing] = SttpBackendStub.synchronous
-        .whenRequestMatches(_ => true)
-        .thenRespondOk()
       val data = ProcessingData(mock[ConsumerRecord[String, Array[Byte]]], "")
       val result = fakeFilter.makeVerificationLookup(data)
       //assert(result.code == StatusCodes.Ok)

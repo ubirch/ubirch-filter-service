@@ -18,8 +18,6 @@ case class Headers(protected var _headers: Seq[(String, String)]) {
 
   def headers: Seq[(String, String)] = _headers
 
-  def hasHeader(headerName: String): Boolean = get(headerName).isDefined
-
   def add(headers: (String, String)*): Headers = new Headers(this.headers ++ headers)
 
   def apply(key: String): String = get(key).getOrElse(scala.sys.error("Header doesn't exist"))
@@ -27,8 +25,6 @@ case class Headers(protected var _headers: Seq[(String, String)]) {
   def get(key: String): Option[String] = getAll(key).headOption
 
   def getAll(key: String): Seq[String] = toMap.getOrElse(key, Nil)
-
-  def keys: Set[String] = toMap.keySet
 
   def remove(keys: String*): Headers = {
     val keySet = TreeSet(keys: _*)(CaseInsensitiveOrdered)
@@ -65,11 +61,6 @@ case class Headers(protected var _headers: Seq[(String, String)]) {
   override def hashCode: Int = lowercaseMap.hashCode()
 
   override def toString: String = headers.toString()
-
-  def toJson = EventLogJsonSupport.ToJson(toMap)
-
-  def toBase64String: String = toJson.toBase64String
-
 }
 
 object Headers {

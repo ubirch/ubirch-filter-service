@@ -2,6 +2,7 @@ package com.ubirch.filter.model.eventlog
 
 import java.util.Date
 
+import io.getquill.Embedded
 import org.json4s.JValue
 
 /**
@@ -35,30 +36,17 @@ case class EventLogRow(
                         nonce: String
                       )
 
-object EventLogRow {
-  def fromEventLog(eventLog: EventLog): EventLogRow = {
-    EventLogRow(
-      id = eventLog.id,
-      customerId = eventLog.customerId,
-      serviceClass = eventLog.serviceClass,
-      category = eventLog.category,
-      event = eventLog.event,
-      eventTime = eventLog.eventTime,
-      eventTimeInfo = TimeInfo.fromDate(eventLog.eventTime),
-      signature = eventLog.signature,
-      nonce = eventLog.nonce
-    )
-  }
 
-  def toEventLog(eventLogRow: EventLogRow): EventLog = {
-    EventLog(eventLogRow.event)
-      .withCategory(eventLogRow.category)
-      .withEventTime(eventLogRow.eventTime)
-      .withSignature(eventLogRow.signature)
-      .withNonce(eventLogRow.nonce)
-      .withServiceClass(eventLogRow.serviceClass)
-      .withNewId(eventLogRow.id)
-      .withCustomerId(eventLogRow.customerId)
-
-  }
-}
+/**
+  * This case class represents the the explicit values of the event time on the cassandra db.
+  * They are explicitly shown to help have better clustering keys.
+  * This class is an expansion of the event time date.
+  * @param year Represents the year when the event took place
+  * @param month Represents the month when the event took place
+  * @param day Represents the day when the event took place
+  * @param hour Represents the hour when the event took place
+  * @param minute Represents the minutes when the event took place
+  * @param second Represents the seconds when the event took place
+  * @param milli Represents the milliseconds when the event took place
+  */
+case class TimeInfo(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int, milli: Int) extends Embedded

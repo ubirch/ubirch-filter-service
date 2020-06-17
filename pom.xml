@@ -177,13 +177,6 @@
             <version>3.10.5</version>
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/com.softwaremill.sttp/core -->
-        <dependency>
-            <groupId>com.softwaremill.sttp</groupId>
-            <artifactId>core_2.12</artifactId>
-            <version>1.5.19</version>
-        </dependency>
-
         <dependency>
             <groupId>io.monix</groupId>
             <artifactId>monix_${scala.compat.version}</artifactId>

@@ -20,27 +20,26 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.TimeoutException
 
 import com.fasterxml.jackson.core.JsonParseException
-import com.softwaremill.sttp.{HttpURLConnectionBackend, _}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.cache.{Cache, NoCacheConnectionException}
 import com.ubirch.filter.model.{FilterError, Rejection}
+import com.ubirch.filter.model.eventlog.{EventLogRow, Finder}
+import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.util.Messages
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
 import com.ubirch.kafka.MessageEnvelope
-import com.ubirch.kafka.express.{ExpressKafka, ExpressKafkaApp}
+import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
+import javax.inject.{Inject, Singleton}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
-import com.ubirch.filter.model.eventlog.{CassandraFinder, EventLogRow}
-import com.ubirch.filter.services.Lifecycle
-import com.ubirch.filter.services.execution.ExecutionProvider
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
-import javax.inject.{Inject, Singleton}
 
+import scala.collection.immutable
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -67,13 +66,12 @@ trait FilterService {
     * processing the same messages once more.
     *
     * @param data    The data to become processed.
-    * @param backend The HTTP Client for sending the lookup request.
     * @throws NeedForPauseException to communicate the underlying app to pause the processing
     *                               of further messages.
     * @return Returns the HTTP response.
     */
   @throws[NeedForPauseException]
-  def makeVerificationLookup(data: ProcessingData)(implicit backend: SttpBackend[Id, Nothing]): Option[EventLogRow]
+  def makeVerificationLookup(data: ProcessingData): Future[Option[EventLogRow]]
 
   /**
     * Method that checks the cache regarding earlier processing of a message with the same{
@@ -137,7 +135,7 @@ trait FilterService {
   def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
 }
 
-abstract class AbstractFilterService(cache: Cache, cassandraFinder: CassandraFinder, val config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, Array[Byte], Unit] with LazyLogging {
+abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, Array[Byte], Unit] with LazyLogging {
 
   override val prefix: String = "Ubirch"
 
@@ -161,7 +159,6 @@ abstract class AbstractFilterService(cache: Cache, cassandraFinder: CassandraFin
   override val valueDeserializer: Deserializer[Array[Byte]] = new ByteArrayDeserializer
 
   implicit val formats: Formats = com.ubirch.kafka.formats
-  implicit val backend: SttpBackend[Id, Nothing] = HttpURLConnectionBackend()
   private val ubirchEnvironment = config.getString(FilterConfPaths.ENVIRONMENT)
   val producerErrorTopic: String = config.getString(ProducerConfPaths.ERROR_TOPICS)
 
@@ -172,7 +169,7 @@ abstract class AbstractFilterService(cache: Cache, cassandraFinder: CassandraFin
     */
   override val process: Process = { crs =>
 
-    val futureResponse = crs.map { cr =>
+    val futureResponse: immutable.Seq[Future[Option[RecordMetadata]]] = crs.map { cr =>
       logger.debug("consumer record received with key: " + cr.key())
 
       extractData(cr).map { msgEnvelope: MessageEnvelope =>
@@ -185,10 +182,12 @@ abstract class AbstractFilterService(cache: Cache, cassandraFinder: CassandraFin
           if (cacheContainsHash(data)) {
             reactOnReplayAttack(cr, msgEnvelope, Messages.foundInCacheMsg)
           } else {
-            makeVerificationLookup(data) match {
-              case Some(value) =>
+            makeVerificationLookup(data).flatMap {
+              case Some(_) =>
+                logger.debug("Found a match in cassandra, launching reactOnReplayAttack")
                 reactOnReplayAttack(cr, msgEnvelope, Messages.foundInVerificationMsg)
               case None =>
+                logger.debug("Found no match in cassandra")
                 forwardUPP(data)
             }
           }
@@ -232,18 +231,31 @@ abstract class AbstractFilterService(cache: Cache, cassandraFinder: CassandraFin
     }
   }
 
-  def makeVerificationLookup(data: ProcessingData)(implicit backend: SttpBackend[Id, Nothing]): Option[EventLogRow] = {
+  def makeVerificationLookup(data: ProcessingData): Future[Option[EventLogRow]] = {
+
     try {
-      logger.info(s"LOOKING FOR VALUE ${data.payload.substring(1, data.payload.length - 1)}")
-      val res = Await.result(cassandraFinder.findUPP(data.payload), 1.second)
-      logger.info(s"CASSANDRA LOOKUP RES = ${res.isDefined}")
-      res
+      val trimmedValue = trimPayload(data.payload)
+      finder.findUPP(trimmedValue)
     } catch {
       //Todo: Should I catch further Exceptions?
       case ex: TimeoutException =>
         publishErrorMessage(s"http timeout while verification lookup for ${data.cr.key()}.", data.cr, ex)
         throw NeedForPauseException(s"http timeout while verification lookup for ${data.cr.key()}: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
     }
+  }
+
+  /**
+  * Sometimes the payload contains " at the beginning and the end of the payload, which makes cassandra go nuts and prevent
+    * the value from being found
+    * @param payload the payload to (eventually) trim
+    * @return a trimmed string on which the first and last char will not be "
+    */
+  private def trimPayload(payload: String) = {
+    if (payload.length > 2) {
+      if (payload.head == '\"' && payload.endsWith("\"")) {
+        payload.substring(1, payload.length - 1)
+      } else payload
+    } else payload
   }
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
@@ -314,6 +326,6 @@ abstract class AbstractFilterService(cache: Cache, cassandraFinder: CassandraFin
  * @author ${user.name}
  */
 @Singleton
-class DefaultFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, cassandraFinder, config, lifecycle) {
+class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
 
 }

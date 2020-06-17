@@ -16,48 +16,47 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.concurrent.TimeoutException
 import java.util.{Base64, UUID}
+import java.util.concurrent.TimeoutException
 
+import com.github.nosan.embedded.cassandra.cql.CqlScript
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
-import com.softwaremill.sttp.testing.SttpBackendStub
-import com.softwaremill.sttp.{HttpURLConnectionBackend, Id, StatusCodes, SttpBackend}
 import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse, RedisCache}
-import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
-import com.ubirch.filter.util.Messages
-import com.ubirch.filter.{Binder, InjectorHelper}
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
+import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse}
+import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer, Values}
 import com.ubirch.filter.services.config.ConfigProvider
+import com.ubirch.filter.util.Messages
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
-import com.ubirch.filter.model.eventlog.CassandraFinder
+import com.ubirch.filter.model.eventlog.{CassandraFinder, Finder}
+import com.ubirch.filter.models.CassandraFinderAlwaysFound
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
+import io.prometheus.client.CollectorRegistry
+import javax.inject.{Inject, Singleton}
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.JsonAST._
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach, MustMatchers, WordSpec}
-import redis.embedded.RedisServer
-import io.prometheus.client.CollectorRegistry
-import javax.inject.{Inject, Singleton}
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.language.postfixOps
+import org.scalatest._
 import os.proc
+import redis.embedded.RedisServer
 
-import scala.util.Try
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.language.postfixOps
 
 
 /**
  * This class provides all integration tests, except for those testing a missing redis connection on startup.
  * The Kafka config has to be inside each single test to enable parallel testing with different ports.
  */
-class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with EmbeddedRedis with MustMatchers with LazyLogging with BeforeAndAfter with BeforeAndAfterEach {
+class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -83,10 +82,22 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
   }
 
 
+  /**
+  * Simple injector that replaces the kafka bootstrap server and topics to the given ones
+    */
   def FakeSimpleInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
     override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
   })) {}
 
+
+  override protected def beforeAll(): Unit = {
+    startCassandra()
+    cassandra.executeScripts(eventLogCreationCassandraStatement)
+  }
+
+  override def afterAll(): Unit = {
+    stopCassandra()
+  }
 
   /**
    * Method killing any embedded redis application, in case an earlier test was aborted without executing after.
@@ -94,7 +105,7 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
    */
   before {
     try {
-      val embeddedRedisPid = getRedisPid(6379)
+      val embeddedRedisPid = getPidOfServiceUsingGivenPort(6379)
       proc("kill", "-9", embeddedRedisPid).call()
     } catch {
       case _: Throwable =>
@@ -104,14 +115,6 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     redis.start()
   }
 
-  private def getRedisPid(port: Int) = {
-    proc("lsof", "-t", "-i", s":$port", "-s", "TCP:LISTEN").call().chunks.iterator
-      .collect {
-        case Left(s) => s
-        case Right(s) => s
-      }
-      .map(x => new String(x.array)).map(_.trim.toInt).toList.head
-  }
 
   /**
    * Called after all tests. Not working always unfortunately.
@@ -126,7 +129,7 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     Thread.sleep(10000)
   }
 
-  override protected def beforeEach() = {
+  override protected def beforeEach(): Unit = {
     CollectorRegistry.defaultRegistry.clear()
   }
 
@@ -187,28 +190,27 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
-      EmbeddedKafka.start()
-      Thread.sleep(1000)
 
       def FakeInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterReplayAttack])
+        override def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinderAlwaysFound])
       })) {}
 
-      val Injector = FakeInjector(bootstrapServers, Messages.jsonTopic)
+      withRunningKafka {
+        val Injector = FakeInjector(bootstrapServers, Messages.jsonTopic)
 
-      val fakeFilter = Injector.get[AbstractFilterService]
-      fakeFilter.consumption.startPolling()
-      Thread.sleep(1000)
+        val fakeFilter = Injector.get[AbstractFilterService]
+        fakeFilter.consumption.startPolling()
+        Thread.sleep(1000)
 
-      val msgEnvelope = generateMessageEnvelope()
-      publishToKafka(Messages.jsonTopic, msgEnvelope)
+        val msgEnvelope = generateMessageEnvelope()
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
 
-      val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
-      rejection.message mustBe Messages.foundInVerificationMsg
-      rejection.rejectionName mustBe Messages.replayAttackName
+        val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
+        rejection.message mustBe Messages.foundInVerificationMsg
+        rejection.rejectionName mustBe Messages.replayAttackName
+      }
 
-      EmbeddedKafka.stop()
     }
 
     "not forward unparseable messages" in {
@@ -217,27 +219,28 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
       Thread.sleep(1000)
 
-      EmbeddedKafka.start()
-      Thread.sleep(1000)
+      withRunningKafka {
+        Thread.sleep(1000)
 
-      implicit val serializer: Serializer[String] = new org.apache.kafka.common.serialization.StringSerializer()
+        implicit val serializer: Serializer[String] = new org.apache.kafka.common.serialization.StringSerializer()
 
-      publishToKafka[String](Messages.jsonTopic, "unparseable example message")
+        publishToKafka[String](Messages.jsonTopic, "unparseable example message")
 
-      val Injector = FakeSimpleInjector(bootstrapServers, Messages.jsonTopic)
+        val Injector = FakeSimpleInjector(bootstrapServers, Messages.jsonTopic)
 
-      val consumer: DefaultFilterService = Injector.get[DefaultFilterService]
-      consumer.consumption.startPolling()
-      Thread.sleep(1000)
+        val consumer: DefaultFilterService = Injector.get[DefaultFilterService]
+        consumer.consumption.startPolling()
+        Thread.sleep(1000)
 
-      val message: FilterError = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
-      message.serviceName mustBe "filter-service"
-      message.exceptionName mustBe "JsonParseException"
-      message.message mustBe "unable to parse consumer record with key: null."
-      assertThrows[TimeoutException] {
-        consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
+        val message: FilterError = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
+        message.serviceName mustBe "filter-service"
+        message.exceptionName mustBe "JsonParseException"
+        message.message mustBe "unable to parse consumer record with key: null."
+        assertThrows[TimeoutException] {
+          consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
+        }
       }
-      EmbeddedKafka.stop()
+
 
     }
 
@@ -247,42 +250,40 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
-      EmbeddedKafka.start()
-
       def FakeInjectorCustomCache(configProvider: ConfigProvider): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(configProvider)
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[ExceptionFilterServ])
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CustomCache])
       })) {}
 
-      val Injector = FakeInjectorCustomCache(customTestConfigProvider(bootstrapServers, Messages.jsonTopic))
-      val fakeFilterService = Injector.get[AbstractFilterService]
+      withRunningKafka {
+        val Injector = FakeInjectorCustomCache(customTestConfigProvider(bootstrapServers, Messages.jsonTopic))
+        val fakeFilterService = Injector.get[AbstractFilterService]
 
-      val cache = Injector.get[Cache].asInstanceOf[CustomCache]
-      fakeFilterService.consumption.startPolling()
+        val cache = Injector.get[Cache].asInstanceOf[CustomCache]
+        fakeFilterService.consumption.startPolling()
 
-      val msgEnvelope1 = generateMessageEnvelope()
-      val msgEnvelope2 = generateMessageEnvelope()
+        val msgEnvelope1 = generateMessageEnvelope()
+        val msgEnvelope2 = generateMessageEnvelope()
 
-      publishToKafka(Messages.jsonTopic, msgEnvelope1)
-      Thread.sleep(5000)
-      publishToKafka(Messages.jsonTopic, msgEnvelope2)
+        publishToKafka(Messages.jsonTopic, msgEnvelope1)
+        Thread.sleep(5000)
+        publishToKafka(Messages.jsonTopic, msgEnvelope2)
 
-      Thread.sleep(5000)
-      println(cache.list)
+        Thread.sleep(5000)
+        println(cache.list)
 
-      /**
-       * the first two messages should be msgEnvelope1
-       */
-      assert(cache.list.head == cache.list(1))
+        /**
+          * the first two messages should be msgEnvelope1
+          */
+        assert(cache.list.head == cache.list(1))
 
-      /**
-       * the last two messages should be msgEnvelope1 and msgEnvelope2 as the consumer repeats consuming the
-       * not yet committed messages.
-       */
-      assert(cache.list.last != cache.list(cache.list.size - 2))
-
-      EmbeddedKafka.stop()
+        /**
+          * the last two messages should be msgEnvelope1 and msgEnvelope2 as the consumer repeats consuming the
+          * not yet committed messages.
+          */
+        assert(cache.list.last != cache.list(cache.list.size - 2))
+      }
     }
 
     "forward all messages when activeState equals false" in {
@@ -290,39 +291,29 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
-      EmbeddedKafka.start()
-
       def FakeInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterDoesNothing])
       })) {}
 
-      val Injector = FakeInjector(bootstrapServers, Messages.jsonTopic)
 
-      val fakeFilter = Injector.get[FakeFilterDoesNothing]
-      fakeFilter.consumption.startPolling()
+      withRunningKafka {
 
-      val msgEnvelope = generateMessageEnvelope()
-      publishToKafka(Messages.jsonTopic, msgEnvelope)
+        val Injector = FakeInjector(bootstrapServers, Messages.jsonTopic)
 
-      val forwardedMessage = consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
-      forwardedMessage.ubirchPacket.getUUID mustEqual msgEnvelope.ubirchPacket.getUUID
-      EmbeddedKafka.stop()
+        val fakeFilter = Injector.get[FakeFilterDoesNothing]
+        fakeFilter.consumption.startPolling()
+
+        val msgEnvelope = generateMessageEnvelope()
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
+
+        val forwardedMessage = consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic)
+        forwardedMessage.ubirchPacket.getUUID mustEqual msgEnvelope.ubirchPacket.getUUID
+      }
     }
   }
 
   "Verification Lookup" must {
-
-    implicit val backend: SttpBackend[Id, Nothing] = HttpURLConnectionBackend()
-
-    //Todo: Remove? As I always need a hash, which really has been used in Dev. Mikolaj even said, the processing should have been aborted, so it returns true.
-    //Todo continue: But as I understood it, as soon as it has been processed anytime it should return true.?
-    //    "return 200 when hash already has been processed once" in {
-    //      val payloadEncoded = "v1jjADSpJFPl7vTg8gsiui2aTOCL1v4nYrmiTePvcxNBt1x/+JoApHOLa4rjGGEz72PusvGXbF9t6qe8Kbck/w=="
-    //      val filterConsumer = new FilterService(RedisCache)
-    //      val result = filterConsumer.makeVerificationLookup(payloadEncoded)
-    //      assert(result.code == StatusCodes.Ok)
-    //    }
 
     "return NotFound if hash hasn't been processed yet." in {
       val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "key", "Teststring".getBytes)
@@ -330,8 +321,12 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
       val data = ProcessingData(cr, payload)
       val Injector = FakeSimpleInjector(ConsumerConfPaths.BOOTSTRAP_SERVERS, ConsumerConfPaths.TOPICS)
       val filterConsumer = Injector.get[DefaultFilterService]
-      val result = filterConsumer.makeVerificationLookup(data)
-      //assert(result.code == StatusCodes.NotFound)
+      val result = Await.result(filterConsumer.makeVerificationLookup(data), 5.second)
+      implicit val ec: ExecutionContext = Injector.get[ExecutionContext]
+      result match {
+        case Some(_) => fail()
+        case None =>
+      }
     }
   }
 
@@ -347,16 +342,103 @@ class FilterServiceIntegrationTest extends WordSpec with EmbeddedKafka with Embe
     }
   }
 
+  "Cassandra lookup" must {
+
+    /**
+      * This test insert a certain value in cassandra (the payload) and verify that the filter finds it
+      */
+    "consume and process successfully when Found" in {
+
+      cassandra.executeScripts(
+        CqlScript.statements(
+          insertEventSql
+        )
+      )
+
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+
+      def testInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
+      })) {}
+
+      withRunningKafka {
+        val msgEnvelope = generateMessageEnvelope(payload)
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
+        Thread.sleep(1000)
+        val Injector = testInjector(bootstrapServers, Messages.jsonTopic)
+        val consumer = Injector.get[DefaultFilterService]
+        consumer.consumption.startPolling()
+        Thread.sleep(1000)
+
+        val rejection = consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
+        rejection.message mustBe Messages.foundInVerificationMsg
+        rejection.rejectionName mustBe Messages.replayAttackName
+      }
+
+
+    }
+
+    "consume and process successfully when not found" in {
+      cassandra.executeScripts(
+        CqlScript.statements(
+          insertEventSql
+        )
+      )
+
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+
+      def testInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
+      })) {}
+
+      withRunningKafka {
+        val msgEnvelope = generateMessageEnvelope(payload + ",")
+        publishToKafka(Messages.jsonTopic, msgEnvelope)
+        Thread.sleep(1000)
+        val Injector = testInjector(bootstrapServers, Messages.jsonTopic)
+        val consumer = Injector.get[DefaultFilterService]
+        consumer.consumption.startPolling()
+        Thread.sleep(1000)
+
+        try {
+          consumeFirstMessageFrom[Rejection](Messages.rejectionTopic)
+          fail()
+        } catch {
+          case _: java.util.concurrent.TimeoutException =>
+          case _: Throwable => fail()
+        }
+      }
+
+    }
+  }
+
+  val payload = "c29tZSBieXRlcyEAAQIDnw=="
+
+  val insertEventSql: String =
+    s"""
+       |INSERT INTO events (id, customer_id, service_class, category, event, event_time, year, month, day, hour, minute, second, milli, signature, nonce)
+       | VALUES ('$payload', 'customer_id', 'service_class', '${Values.UPP_CATEGORY}', '{
+       |   "hint":0,
+       |   "payload":"$payload",
+       |   "signature":"5aTelLQBerVT/vJiL2qjZCxWxqlfwT/BaID0zUVy7LyUC9nUdb02//aCiZ7xH1HglDqZ0Qqb7GyzF4jtBxfSBg==",
+       |   "signed":"lRKwjni1ymWXEeiBhcg+pwAOTQCwc29tZSBieXRlcyEAAQIDnw==",
+       |   "uuid":"8e78b5ca-6597-11e8-8185-c83ea7000e4d",
+       |   "version":34
+       |}', '2019-01-29T17:00:28.333Z', 2019, 5, 2, 19, 439, 16, 0, '0681D35827B17104A2AACCE5A08C4CD1BC8A5EF5EFF4A471D15976693CC0D6D67392F1CACAE63565D6E521D2325A998CDE00A2FEF5B65D0707F4158000EB6D05',
+       |'34376336396166392D336533382D343665652D393063332D616265313364383335353266');
+    """.stripMargin
+
 }
 
-// Some classes have to be defnied outside of the functions that uses them, as Guice does not support injecting into inner classes
-
-@Singleton
-class FakeFilterReplayAttack @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, cassandraFinder, config, lifecycle) {
-  override implicit val backend: SttpBackendStub[Id, Nothing] = SttpBackendStub.synchronous
-    .whenRequestMatches(_ => true)
-    .thenRespondOk()
-}
+// Some classes have to be defined outside of the functions that uses them, as Guice does not support injecting into inner classes
 
 /**
   * A fake filter service that always throws an exception, when the send() method is called.

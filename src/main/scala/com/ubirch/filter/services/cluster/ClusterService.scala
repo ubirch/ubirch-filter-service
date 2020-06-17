@@ -5,8 +5,7 @@ import java.net.InetSocketAddress
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RoundRobinPolicy
 import com.typesafe.config.Config
-import com.ubirch.filter.util.Exceptions.InvalidConsistencyLevel
-import com.ubirch.filter.util.URLsHelper
+import com.ubirch.filter.util.Exceptions.{InvalidConsistencyLevel, InvalidContactPointsException, NoContactPointsException}
 import com.ubirch.filter.ConfPaths.CassandraClusterConfPaths
 import javax.inject._
 
@@ -18,7 +17,30 @@ trait ClusterConfigs {
   val contactPoints: List[InetSocketAddress]
 
   def buildContactPointsFromString(contactPoints: String): List[InetSocketAddress] = {
-    URLsHelper.inetSocketAddressesString(contactPoints)
+    try {
+      if (contactPoints.nonEmpty) {
+        contactPoints
+          .split(",")
+          .toList
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .map { entry =>
+            entry.split(":").toList.map(_.trim).filter(_.nonEmpty) match {
+              case List(ip, portNumber) => new InetSocketAddress(ip, portNumber.toInt)
+              case _ => throw InvalidContactPointsException(s"The string provided is malformed: $contactPoints")
+            }
+          }
+      } else {
+        throw NoContactPointsException("No endpoints provided.")
+      }
+    } catch {
+      case e: NumberFormatException =>
+        throw InvalidContactPointsException(s"The string provided is malformed: $contactPoints : ${e.getMessage}")
+      case e: NoContactPointsException =>
+        throw e
+      case e: Exception =>
+        throw InvalidContactPointsException(e.getMessage)
+    }
   }
 
   val maybeConsistencyLevel: Option[ConsistencyLevel]
