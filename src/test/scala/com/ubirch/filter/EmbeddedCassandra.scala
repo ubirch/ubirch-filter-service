@@ -19,7 +19,8 @@ trait EmbeddedCassandra extends LazyLogging {
       logger.info("TRYING STARTING CASSI")
       cassandra.start()
     } catch {
-      case e: com.github.nosan.embedded.cassandra.CassandraException => logger.error("CASSI THREW EXCEPTION WHILE STARTING", e.getMessage)
+      case e: com.github.nosan.embedded.cassandra.CassandraException => logger.error("CASSI THREW EXCEPTION WHILE STARTING: ", e.getMessage)
+      case e: Throwable => logger.error("ERROR WHILE STARTING CASSANDRA: ", e.getMessage)
     }
   }
   def stopCassandra(): Unit = {
