@@ -213,7 +213,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
   * @param cache The cache used to check if a message has already been received before.
   */
 @Singleton
-class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache: Cache, cassandraFinder, config: Config, lifecycle: Lifecycle) with MockitoSugar {
+class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache: Cache, cassandraFinder, config: Config) with MockitoSugar {
   override lazy val consumption: ConsumerRunner[String, Array[Byte]] = mock[ConsumerRunner[String, Array[Byte]]]
   override lazy val production: ProducerRunner[String, Array[Byte]] = mock[ProducerRunner[String, Array[Byte]]]
 
@@ -229,7 +229,7 @@ class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder
   * A filter service, that always throws an exception when the send method is called.
   */
 @Singleton
-class ExceptionFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache: Cache, cassandraFinder, config: Config, lifecycle: Lifecycle) with MockitoSugar {
+class ExceptionFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache: Cache, cassandraFinder, config: Config) with MockitoSugar {
   override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
     Future {
       throw new Exception("test exception")

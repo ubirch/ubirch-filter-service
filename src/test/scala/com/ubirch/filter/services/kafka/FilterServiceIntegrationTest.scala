@@ -32,7 +32,6 @@ import com.ubirch.filter.util.Messages
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
 import com.ubirch.filter.model.eventlog.{CassandraFinder, Finder}
 import com.ubirch.filter.models.CassandraFinderAlwaysFound
-import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
@@ -509,7 +508,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
   * @param cache The cache is only used to record the messages being processed in this test.
   */
 @Singleton
-class ExceptionFilterServ @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends AbstractFilterService(cache: Cache, cassandraFinder, config: Config, lifecycle: Lifecycle) {
+class ExceptionFilterServ @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config)(override implicit val ec: ExecutionContext) extends AbstractFilterService(cache: Cache, cassandraFinder, config: Config) {
   override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
     Future {
       throw new Exception("test exception")

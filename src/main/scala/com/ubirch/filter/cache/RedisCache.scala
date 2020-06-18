@@ -43,7 +43,7 @@ class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler)
   private val evaluatedPW = if (password == "") null else password
   private val useReplicated: Boolean = conf.getBoolean("filterService.redis.useReplicated")
   private val cacheName: String = conf.getString("filterService.redis.cacheName")
-  var redisConf = new org.redisson.config.Config()
+  val redisConf = new org.redisson.config.Config()
   private val prefix = "redis://"
 
   /**

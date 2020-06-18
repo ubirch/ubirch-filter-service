@@ -25,7 +25,6 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.cache.{Cache, NoCacheConnectionException}
 import com.ubirch.filter.model.{FilterError, Rejection, Values}
 import com.ubirch.filter.model.eventlog.{EventLogRow, Finder}
-import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.util.Messages
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
 import com.ubirch.kafka.MessageEnvelope
@@ -135,7 +134,7 @@ trait FilterService {
   def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
 }
 
-abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, Array[Byte], Unit] with LazyLogging {
+abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config) extends FilterService with ExpressKafka[String, Array[Byte], Unit] with LazyLogging {
 
   override val prefix: String = "Ubirch"
 
@@ -323,9 +322,12 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
  * event-log. Only if no replay attack was found the message is forwarded to the event-log system.
  *
  * @param cache The cache used to check if a message has already been received before.
+ * @param finder The finder used to check if a message has already been received before in the event log in case
+ *               the cache is down
+ * @param config The config file containing the configuration needed for the service
  * @author ${user.name}
  */
 @Singleton
-class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
+class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config) {
 
 }
