@@ -115,7 +115,6 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
   "Missing redis connection" must {
 
     "should cause error messages" in {
-      logger.info("EHHHHH should cause error messages")
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort

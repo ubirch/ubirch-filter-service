@@ -24,7 +24,7 @@ import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.cache.{Cache, NoCacheConnectionException}
 import com.ubirch.filter.model.{FilterError, Rejection, Values}
-import com.ubirch.filter.model.eventlog.{EventLogRow, Finder}
+import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.util.Messages
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
 import com.ubirch.kafka.MessageEnvelope
@@ -70,7 +70,7 @@ trait FilterService {
     * @return Returns the HTTP response.
     */
   @throws[NeedForPauseException]
-  def makeVerificationLookup(data: ProcessingData): Future[Option[EventLogRow]]
+  def makeVerificationLookup(data: ProcessingData): Future[Option[String]]
 
   /**
     * Method that checks the cache regarding earlier processing of a message with the same{
@@ -230,7 +230,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
     }
   }
 
-  def makeVerificationLookup(data: ProcessingData): Future[Option[EventLogRow]] = {
+  def makeVerificationLookup(data: ProcessingData): Future[Option[String]] = {
 
     try {
       val trimmedValue = trimPayload(data.payload)

@@ -14,7 +14,7 @@ trait Finder {
     * @param uppHash hash of the UPP that will be looked up
     * @return the hash of the UPP
     */
-  def findUPP(uppHash: String): Future[Option[EventLogRow]]
+  def findUPP(uppHash: String): Future[Option[String]]
 
 }
 
@@ -24,6 +24,6 @@ trait Finder {
 @Singleton
 class CassandraFinder @Inject()(events: EventsDAO)(implicit val ec: ExecutionContext) extends Finder {
 
-  def findUPP(value: String): Future[Option[EventLogRow]] = events.byIdAndCat(value, Values.UPP_CATEGORY).map(_.headOption)
+  def findUPP(value: String): Future[Option[String]] = events.byIdAndCat(value, Values.UPP_CATEGORY).map(_.headOption)
 
 }

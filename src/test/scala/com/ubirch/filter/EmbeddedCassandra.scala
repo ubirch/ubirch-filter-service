@@ -12,7 +12,7 @@ trait EmbeddedCassandra extends LazyLogging {
 
   val cassandra: TestCassandra = new TestCassandra(factory)
 
-  startCassandra()
+  //startCassandra()
 
   def startCassandra(): Unit = {
     logger.info("TRYING STARTING CASSI")

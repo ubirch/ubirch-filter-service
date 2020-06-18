@@ -19,8 +19,8 @@ trait EventLogQueries extends TablePointer[EventLogRow] with CustomEncodings[Eve
 
   implicit val eventSchemaMeta: db.SchemaMeta[EventLogRow] = schemaMeta[EventLogRow]("events")
 
-  def byIdAndCatQ(id: String, category: String): db.Quoted[db.EntityQuery[EventLogRow]] = quote {
-    query[EventLogRow].filter(x => x.id == lift(id) && x.category == lift(category)).map(x => x)
+  def byIdAndCatQ(id: String, category: String): db.Quoted[db.EntityQuery[String]] = quote {
+    query[EventLogRow].filter(x => x.id == lift(id) && x.category == lift(category)).map(x => x.id)
   }
 
 }
@@ -39,6 +39,6 @@ class EventsDAO @Inject()(val connectionService: ConnectionService)(implicit val
   import db._
 
   //These actually run the queries.
-  def byIdAndCat(id: String, category: String): Future[List[EventLogRow]] = run(byIdAndCatQ(id, category))
+  def byIdAndCat(id: String, category: String): Future[List[String]] = run(byIdAndCatQ(id, category))
 
 }
