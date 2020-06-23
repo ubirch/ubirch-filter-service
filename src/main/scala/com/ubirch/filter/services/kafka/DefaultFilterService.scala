@@ -16,6 +16,7 @@
 
 package com.ubirch.filter.services.kafka
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.TimeoutException
 
 import com.fasterxml.jackson.core.JsonParseException
@@ -32,17 +33,20 @@ import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import javax.inject.{Inject, Singleton}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
 
 import scala.collection.immutable
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Success
+
 
 
 case class ProcessingData(cr: ConsumerRecord[String, String], payload: String)
@@ -112,10 +116,10 @@ trait FilterService {
     * before continuing with processing the same messages once more.
     *
     * @param cr               The consumer record of the replay attack.
-    * @param msgEnvelope      The message envelope of the replay attack.
+
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
-  def reactOnReplayAttack(cr: ConsumerRecord[String, String], msgEnvelope: MessageEnvelope, rejectionMessage: String): Future[Option[RecordMetadata]]
+  def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
 
   /**
     * Method that throws an exception in case the service cannot execute it's functionality properly
@@ -180,12 +184,12 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
           forwardUPP(data)
         } else {
           if (cacheContainsHash(data)) {
-            reactOnReplayAttack(cr, msgEnvelope, Messages.foundInCacheMsg)
+            reactOnReplayAttack(cr, Messages.foundInCacheMsg)
           } else {
             makeVerificationLookup(data).flatMap {
               case Some(_) =>
                 logger.debug("Found a match in cassandra, launching reactOnReplayAttack")
-                reactOnReplayAttack(cr, msgEnvelope, Messages.foundInVerificationMsg)
+                reactOnReplayAttack(cr, Messages.foundInVerificationMsg)
               case None =>
                 logger.debug("Found no match in cassandra")
                 forwardUPP(data)
@@ -279,15 +283,28 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
     result.map { x => Some(x) }
   }
 
-  def reactOnReplayAttack(cr: ConsumerRecord[String, String], msgEnvelope: MessageEnvelope, rejectionMessage: String): Future[Option[RecordMetadata]] = {
+  protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = production.send(producerRecord)
 
+  /**
+  * Helper method that generates the producer record that will be sent when a replay attack is detected
+    * @param cr The consumerRecord on which to act
+    * @param rejectionMessage why the message was rejected
+    * @return a producer record with the correct HTTP headers and value
+    */
+  def generateReplayAttackProducerRecord(cr: ConsumerRecord[String, String], rejectionMessage: String): ProducerRecord[String, String] = {
     implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
     val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
-    send(producerRejectionTopic, rj.toString)
+    val headers = (cr.headers().toArray :+ new RecordHeader(Values.HTTP_STATUS_CODE_HEADER, Values.HTTP_STATUS_CODE_REJECTION_ERROR.getBytes(UTF_8))).toIterable.asJava
+    new ProducerRecord[String, String](producerRejectionTopic, null, cr.key(), rj.toString, headers)
+  }
+
+  def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+    val producerRecordToSend: ProducerRecord[String, String] = generateReplayAttackProducerRecord(cr, rejectionMessage)
+    send(producerRecordToSend)
       .recoverWith {
-        case _ => send(producerRejectionTopic, rj.toString)
+        case _ => send(producerRecordToSend)
       }.recoverWith { case ex: Exception =>
-      pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic $producerRejectionTopic", cr, ex, 2 seconds)
+      pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, 2 seconds)
     }.map { x => Some(x) }
   }
 

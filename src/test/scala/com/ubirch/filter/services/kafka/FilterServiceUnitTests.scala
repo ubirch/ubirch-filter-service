@@ -16,6 +16,8 @@
 
 package com.ubirch.filter.services.kafka
 
+import java.nio.charset.StandardCharsets.UTF_8
+
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
@@ -24,6 +26,7 @@ import com.ubirch.filter.cache.{Cache, CacheMockAlwaysException, CacheMockAlways
 import com.ubirch.filter.model.eventlog.CassandraFinder
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.ConfPaths.ProducerConfPaths
+import com.ubirch.filter.model.Values
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.consumer.ConsumerRunner
 import com.ubirch.kafka.producer.ProducerRunner
@@ -31,11 +34,13 @@ import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
 import javax.inject.{Inject, Singleton}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.json4s.JObject
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import org.scalatest.mockito.MockitoSugar
 
+import scala.collection.breakOut
+import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 
@@ -195,15 +200,22 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = ExceptionFilterServiceInjector
       val conf = Injector.get[Config]
       val exceptionFilterService = Injector.get[ExceptionFilterServ]
-      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(cr, message, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
+      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
     }
 
     "send the rejectionMessage successfully" in {
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
       val conf = Injector.get[Config]
-      fakeFilterService.reactOnReplayAttack(cr, mock[MessageEnvelope], conf.getString(ProducerConfPaths.REJECTION_TOPIC))
+      fakeFilterService.reactOnReplayAttack(cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC))
       assert(fakeFilterService.counter == 1)
+    }
+
+    "Add the http headers" in {
+      val Injector = FakeFilterServiceInjector
+      val fakeFilterService = Injector.get[FakeFilterService]
+      val headers: Map[String, String] = fakeFilterService.generateReplayAttackProducerRecord(cr, "coucou").headers().asScala.map(h => h.key() -> new String(h.value(), UTF_8))(breakOut)
+      headers(Values.HTTP_STATUS_CODE_HEADER) mustBe Values.HTTP_STATUS_CODE_REJECTION_ERROR
     }
   }
 
@@ -220,6 +232,11 @@ class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder
   override lazy val production: ProducerRunner[String, String] = mock[ProducerRunner[String, String]]
 
   var counter = 0
+
+  override def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = {
+    counter = 1
+    Future(mock[RecordMetadata])
+  }
 
   override def send(topic: String, value: String): Future[RecordMetadata] = {
     counter = 1
