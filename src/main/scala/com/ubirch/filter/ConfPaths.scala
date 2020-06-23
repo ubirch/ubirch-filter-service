@@ -27,7 +27,9 @@ object ConfPaths {
   trait ProducerConfPaths {
     final val LINGER_MS = "filterService.kafkaApi.kafkaProducer.lingerMS"
     final val BOOTSTRAP_SERVERS = "filterService.kafkaApi.kafkaProducer.bootstrapServers"
-    final val ERROR_TOPICS = "filterService.kafkaApi.kafkaConsumer.errorTopic"
+    final val ERROR_TOPIC = "filterService.kafkaApi.kafkaProducer.errorTopic"
+    final val FORWARD_TOPIC = "filterService.kafkaApi.kafkaProducer.forwardTopic"
+    final val REJECTION_TOPIC = "filterService.kafkaApi.kafkaProducer.rejectionTopic"
   }
 
   trait FilterConfPaths {

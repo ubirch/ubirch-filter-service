@@ -1,12 +1,14 @@
 package com.ubirch.filter
 
+import com.typesafe.config.Config
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
 import net.manub.embeddedkafka.EmbeddedKafka
-import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers, WordSpec}
+import org.scalatest.concurrent.ScalaFutures
 import os.proc
 
-import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
 
 trait TestBase
   extends WordSpec
@@ -22,6 +24,17 @@ trait TestBase
 
   def getPidOfServiceUsingGivenPort(port: Int): Int = TestBase.getPidOfServiceUsingGivenPort(port)
 
+  def readConsumerTopicHead(conf: Config): String = conf.getString(ConsumerConfPaths.TOPICS).split(", ").toSet.head
+  def readProducerForwardTopic(conf: Config): String = conf.getString(ProducerConfPaths.FORWARD_TOPIC)
+  def readProducerErrorTopic(conf: Config): String = conf.getString(ProducerConfPaths.ERROR_TOPIC)
+  def readProducerRejectionTopic(conf: Config): String = conf.getString(ProducerConfPaths.REJECTION_TOPIC)
+
+  // TODO: remove that before pushing
+  // val conf = Injector.get[Config]
+  // Messages.jsonTopic -> readConsumerTopicHead(conf)
+  // Messages.rejectionTopic -> readProducerRejectionTopic(conf)
+  // MEssages.errorTopic -> readProducerErrorTopic(conf)
+  // Message.encodingTopic -> readProducerForwardTopic(conf)
 }
 
 object TestBase {

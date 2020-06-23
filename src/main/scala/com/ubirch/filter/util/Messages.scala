@@ -18,10 +18,6 @@ package com.ubirch.filter.util
 
 object Messages {
 
-  val jsonTopic = "json.to.sign"
-  val encodingTopic = "com.ubirch.eventlog.encoder"
-  val errorTopic = "com.ubirch.filter.error"
-  val rejectionTopic = "com.ubirch.filter.rejection"
   val replayAttackName = "replay_attack"
   val foundInCacheMsg = "the hash/payload has been found in the cache."
   val foundInVerificationMsg = "the hash/payload has been found by the verification lookup."

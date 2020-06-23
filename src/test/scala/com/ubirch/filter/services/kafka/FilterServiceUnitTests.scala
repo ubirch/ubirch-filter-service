@@ -23,7 +23,7 @@ import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
 import com.ubirch.filter.cache.{Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
 import com.ubirch.filter.model.eventlog.CassandraFinder
 import com.ubirch.filter.services.Lifecycle
-import com.ubirch.filter.util.Messages
+import com.ubirch.filter.ConfPaths.ProducerConfPaths
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.consumer.ConsumerRunner
 import com.ubirch.kafka.producer.ProducerRunner
@@ -54,7 +54,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
   }
 
 
-  val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "1234", "false".getBytes)
+  val cr = new ConsumerRecord[String, String]("topic", 1, 1, "1234", "false")
   val data = ProcessingData(cr, "")
 
   def FakeFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {
@@ -69,7 +69,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
   "The extractData() method" must {
 
     "return None when the ConsumerRecord has a wrong format" in {
-      val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "1234", "Teststring".getBytes)
+      val cr = new ConsumerRecord[String, String]("topic", 1, 1, "1234", "Teststring")
 
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
@@ -78,7 +78,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     }
 
     "return None when the ConsumerRecord has at least a correct value member" in {
-      val cr = new ConsumerRecord[String, Array[Byte]]("topic", 1, 1, "1234", "false".getBytes)
+      val cr = new ConsumerRecord[String, String]("topic", 1, 1, "1234", "false")
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
       fakeFilterService.extractData(cr) mustBe None
@@ -97,7 +97,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      val data = ProcessingData(mock[ConsumerRecord[String, Array[Byte]]], "")
+      val data = ProcessingData(mock[ConsumerRecord[String, String]], "")
       import scala.concurrent.duration._
       val result = Await.result(fakeFilter.makeVerificationLookup(data), 5.seconds)
       result mustBe None
@@ -114,7 +114,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      val data = ProcessingData(mock[ConsumerRecord[String, Array[Byte]]], "")
+      val data = ProcessingData(mock[ConsumerRecord[String, String]], "")
       fakeFilter.makeVerificationLookup(data)
       //assert(result.code == StatusCodes.Ok)
     }
@@ -193,14 +193,16 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     "throw a NeedForPauseException if the send methdos throws an exception" in {
       val message = new MessageEnvelope(new ProtocolMessage(), mock[JObject])
       val Injector = ExceptionFilterServiceInjector
+      val conf = Injector.get[Config]
       val exceptionFilterService = Injector.get[ExceptionFilterServ]
-      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(cr, message, Messages.rejectionTopic), Duration.Inf))
+      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(cr, message, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
     }
 
     "send the rejectionMessage successfully" in {
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
-      fakeFilterService.reactOnReplayAttack(cr, mock[MessageEnvelope], Messages.rejectionTopic)
+      val conf = Injector.get[Config]
+      fakeFilterService.reactOnReplayAttack(cr, mock[MessageEnvelope], conf.getString(ProducerConfPaths.REJECTION_TOPIC))
       assert(fakeFilterService.counter == 1)
     }
   }
@@ -213,13 +215,13 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
   * @param cache The cache used to check if a message has already been received before.
   */
 @Singleton
-class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache: Cache, cassandraFinder, config: Config) with MockitoSugar {
-  override lazy val consumption: ConsumerRunner[String, Array[Byte]] = mock[ConsumerRunner[String, Array[Byte]]]
-  override lazy val production: ProducerRunner[String, Array[Byte]] = mock[ProducerRunner[String, Array[Byte]]]
+class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, cassandraFinder, config, lifecycle) with MockitoSugar {
+  override lazy val consumption: ConsumerRunner[String, String] = mock[ConsumerRunner[String, String]]
+  override lazy val production: ProducerRunner[String, String] = mock[ProducerRunner[String, String]]
 
   var counter = 0
 
-  override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
+  override def send(topic: String, value: String): Future[RecordMetadata] = {
     counter = 1
     Future(mock[RecordMetadata])
   }
@@ -229,8 +231,8 @@ class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder
   * A filter service, that always throws an exception when the send method is called.
   */
 @Singleton
-class ExceptionFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache: Cache, cassandraFinder, config: Config) with MockitoSugar {
-  override def send(topic: String, value: Array[Byte]): Future[RecordMetadata] = {
+class ExceptionFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, cassandraFinder, config, lifecycle) with MockitoSugar {
+  override def send(topic: String, value: String): Future[RecordMetadata] = {
     Future {
       throw new Exception("test exception")
     }

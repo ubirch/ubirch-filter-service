@@ -16,7 +16,6 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.io.ByteArrayInputStream
 import java.util.concurrent.TimeoutException
 
 import com.fasterxml.jackson.core.JsonParseException
@@ -27,6 +26,7 @@ import com.ubirch.filter.model.{FilterError, Rejection, Values}
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.util.Messages
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
@@ -45,7 +45,7 @@ import scala.language.postfixOps
 import scala.util.Success
 
 
-case class ProcessingData(cr: ConsumerRecord[String, Array[Byte]], payload: String)
+case class ProcessingData(cr: ConsumerRecord[String, String], payload: String)
 
 trait FilterService {
 
@@ -56,7 +56,7 @@ trait FilterService {
     * @param cr The current consumer record to be checked.
     * @return Option of message envelope if (successfully) parsed from JSON.
     */
-  def extractData(cr: ConsumerRecord[String, Array[Byte]]): Option[MessageEnvelope]
+  def extractData(cr: ConsumerRecord[String, String]): Option[MessageEnvelope]
 
   /**
     * Method that checks if the hash/payload has been processed earlier of the event-log system
@@ -77,11 +77,11 @@ trait FilterService {
     * *
     * implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
     * val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
-    * send(Messages.rejectionTopic, rj.toString.getBytes())
+    * send(producerRejectionTopic, rj.toString.getBytes())
     * .recoverWith {
-    * case _ => send(Messages.rejectionTopic, rj.toString.getBytes())
+    * case _ => send(producerRejectionTopic, rj.toString.getBytes())
     * }.recoverWith { case ex: Exception =>
-    * pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${Messages.rejectionTopic}", cr, ex, 2 seconds)
+    * pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${producerRejectionTopic}", cr, ex, 2 seconds)
     * }.map { x => Some(x) }
     * }
     *
@@ -115,7 +115,7 @@ trait FilterService {
     * @param msgEnvelope      The message envelope of the replay attack.
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
-  def reactOnReplayAttack(cr: ConsumerRecord[String, Array[Byte]], msgEnvelope: MessageEnvelope, rejectionMessage: String): Future[Option[RecordMetadata]]
+  def reactOnReplayAttack(cr: ConsumerRecord[String, String], msgEnvelope: MessageEnvelope, rejectionMessage: String): Future[Option[RecordMetadata]]
 
   /**
     * Method that throws an exception in case the service cannot execute it's functionality properly
@@ -131,10 +131,10 @@ trait FilterService {
     *                               of further messages.
     */
   @throws[NeedForPauseException]
-  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
+  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, String], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
 }
 
-abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config) extends FilterService with ExpressKafka[String, Array[Byte], Unit] with LazyLogging {
+abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, String, Unit] with LazyLogging {
 
   override val prefix: String = "Ubirch"
 
@@ -142,26 +142,27 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
   override val lingerMs: Int = config.getInt(ProducerConfPaths.LINGER_MS)
   override val consumerReconnectBackoffMsConfig: Long = config.getLong(ConsumerConfPaths.RECONNECT_BACKOFF_MS_CONFIG)
   override val consumerReconnectBackoffMaxMsConfig: Long = config.getLong(ConsumerConfPaths.RECONNECT_BACKOFF_MAX_MS_CONFIG)
-  override val metricsSubNamespace: String = config.getString(ConsumerConfPaths.METRICS_SUB_NAMESPACE)
-
-  override val producerBootstrapServers: String = config.getString(ProducerConfPaths.BOOTSTRAP_SERVERS)
-  override val keySerializer: serialization.Serializer[String] = new StringSerializer
-  override val valueSerializer: serialization.Serializer[Array[Byte]] = new ByteArraySerializer
   override val consumerTopics: Set[String] = config.getString(ConsumerConfPaths.TOPICS).split(", ").toSet
-
-  override def consumerBootstrapServers: String = config.getString(ConsumerConfPaths.BOOTSTRAP_SERVERS)
-
   override val consumerGroupId: String = config.getString(ConsumerConfPaths.GROUP_ID)
   override val consumerMaxPollRecords: Int = config.getInt(ConsumerConfPaths.MAX_POOL_RECORDS)
   override val consumerGracefulTimeout: Int = config.getInt(ConsumerConfPaths.GRACEFUL_TIMEOUT)
+  override def consumerBootstrapServers: String = config.getString(ConsumerConfPaths.BOOTSTRAP_SERVERS)
+
+  override val producerBootstrapServers: String = config.getString(ProducerConfPaths.BOOTSTRAP_SERVERS)
+  val producerErrorTopic: String = config.getString(ProducerConfPaths.ERROR_TOPIC)
+  val producerForwardTopic: String = config.getString(ProducerConfPaths.FORWARD_TOPIC)
+  val producerRejectionTopic: String = config.getString(ProducerConfPaths.REJECTION_TOPIC)
+
+  override val metricsSubNamespace: String = config.getString(ConsumerConfPaths.METRICS_SUB_NAMESPACE)
+  override val keySerializer: serialization.Serializer[String] = new StringSerializer
+  override val valueSerializer: serialization.Serializer[String] = new StringSerializer
   override val keyDeserializer: Deserializer[String] = new StringDeserializer
-  override val valueDeserializer: Deserializer[Array[Byte]] = new ByteArrayDeserializer
+  override val valueDeserializer: Deserializer[String] = new StringDeserializer
+
+  private val ubirchEnvironment = config.getString(FilterConfPaths.ENVIRONMENT)
+  val filterStateActive: Boolean = config.getBoolean(FilterConfPaths.FILTER_STATE)
 
   implicit val formats: Formats = com.ubirch.kafka.formats
-  private val ubirchEnvironment = config.getString(FilterConfPaths.ENVIRONMENT)
-  val producerErrorTopic: String = config.getString(ProducerConfPaths.ERROR_TOPICS)
-
-  val filterStateActive: Boolean = config.getBoolean(FilterConfPaths.FILTER_STATE)
 
   /**
     * Method that processes all consumer records of the incoming batch (Kafka message).
@@ -199,9 +200,9 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
   }
 
 
-  def extractData(cr: ConsumerRecord[String, Array[Byte]]): Option[MessageEnvelope] = {
+  def extractData(cr: ConsumerRecord[String, String]): Option[MessageEnvelope] = {
     try {
-      val result = parse(new ByteArrayInputStream(cr.value())).extract[MessageEnvelope]
+      val result = parse(cr.value()).extract[MessageEnvelope]
       Some(result)
     } catch {
       case ex: MappingException =>
@@ -266,10 +267,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
       case ex: Exception =>
         publishErrorMessage(s"unable to add ${data.cr.key()} to cache.", data.cr, ex)
     }
-    val result = send(Messages.encodingTopic, data.cr.value())
-      .recoverWith { case _ => send(Messages.encodingTopic, data.cr.value()) }
+    val result = send(producerForwardTopic, data.cr.value())
+      .recoverWith { case _ => send(producerForwardTopic, data.cr.value()) }
       .recoverWith { case ex =>
-        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${Messages.encodingTopic}", data.cr, ex, 2 seconds)
+        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${producerForwardTopic}", data.cr, ex, 2 seconds)
       }
     result.onComplete {
       case Success(_) => logger.info("successfully forwarded consumer record with key: {}", data.cr.key())
@@ -278,15 +279,15 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
     result.map { x => Some(x) }
   }
 
-  def reactOnReplayAttack(cr: ConsumerRecord[String, Array[Byte]], msgEnvelope: MessageEnvelope, rejectionMessage: String): Future[Option[RecordMetadata]] = {
+  def reactOnReplayAttack(cr: ConsumerRecord[String, String], msgEnvelope: MessageEnvelope, rejectionMessage: String): Future[Option[RecordMetadata]] = {
 
     implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
     val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
-    send(Messages.rejectionTopic, rj.toString.getBytes())
+    send(producerRejectionTopic, rj.toString)
       .recoverWith {
-        case _ => send(Messages.rejectionTopic, rj.toString.getBytes())
+        case _ => send(producerRejectionTopic, rj.toString)
       }.recoverWith { case ex: Exception =>
-      pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${Messages.rejectionTopic}", cr, ex, 2 seconds)
+      pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic $producerRejectionTopic", cr, ex, 2 seconds)
     }.map { x => Some(x) }
   }
 
@@ -299,18 +300,23 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
     * @return
     */
   private def publishErrorMessage(errorMessage: String,
-                                  cr: ConsumerRecord[String, Array[Byte]],
+                                  cr: ConsumerRecord[String, String],
                                   ex: Throwable): Future[Any] = {
 
     logger.error(errorMessage, ex.getMessage, ex)
-    send(Messages.errorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString).toString.getBytes)
+    send(producerErrorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString.replace("\"", "\\\"")).toString)
       .recover { case _ => logger.error(s"failure publishing to error topic: $errorMessage") }
   }
 
-  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, Array[Byte]], ex: Throwable, mayBeDuration: FiniteDuration): Nothing = {
+  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, String], ex: Throwable, mayBeDuration: FiniteDuration): Nothing = {
     publishErrorMessage(errorMessage, cr, ex)
     logger.error("throwing NeedForPauseException to pause kafka message consumption")
     throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
+  }
+
+  lifecycle.addStopHook { () =>
+    logger.info("Shutting down kafka")
+    Future.successful(consumption.shutdown(consumerGracefulTimeout, java.util.concurrent.TimeUnit.SECONDS))
   }
 }
 
@@ -328,6 +334,6 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
  * @author ${user.name}
  */
 @Singleton
-class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config) {
+class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
 
 }

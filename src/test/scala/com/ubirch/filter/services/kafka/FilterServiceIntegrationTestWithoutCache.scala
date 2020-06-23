@@ -26,7 +26,6 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.util.Messages
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
@@ -63,24 +62,21 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
   /**
     * Overwrite default bootstrap server and topic values of the kafka consumer and producers
     */
-  def customTestConfigProvider(bootstrapServers: String, consumerTopic: String): ConfigProvider = new ConfigProvider {
+  def customTestConfigProvider(bootstrapServers: String): ConfigProvider = new ConfigProvider {
     override def conf: Config = super.conf.withValue(
       ConsumerConfPaths.BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
       ProducerConfPaths.BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
-    ).withValue(
-      ConsumerConfPaths.TOPICS,
-      ConfigValueFactory.fromAnyRef(consumerTopic)
     )
   }
 
   /**
   * Simple Guice injector that mimicate the default one but replace the bootstrap and consumer topics by the provided one
     */
-  def FakeSimpleInjector(bootstrapServers: String, consumerTopic: String): InjectorHelper = new InjectorHelper(List(new Binder {
-    override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers, consumerTopic))
+  def FakeSimpleInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
+    override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
   })) {}
 
   override protected def beforeEach(): Unit = {
@@ -88,7 +84,6 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
     CollectorRegistry.defaultRegistry.clear()
     EmbeddedKafka.stop()
     EmbeddedKafka.stopZooKeeper()
-    EmbeddedKafka.deleteTopics(List(Messages.jsonTopic, Messages.encodingTopic))
     logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
     try {
       redis.stop()
@@ -104,12 +99,16 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
   var redis: RedisServer = _
 
-  def startKafka(bootstrapServers: String): FilterService = {
+  /**
+  * Start and return a DefaultFilterService as well as its config
+    */
+  def startKafka(bootstrapServers: String): (FilterService, Config) = {
 
-    val Injector = FakeSimpleInjector(bootstrapServers, Messages.jsonTopic)
+    val Injector = FakeSimpleInjector(bootstrapServers)
     val consumer = Injector.get[DefaultFilterService]
+    val conf = Injector.get[Config]
     consumer.consumption.startPolling()
-    consumer
+    (consumer, conf)
   }
 
   "Missing redis connection" must {
@@ -130,17 +129,17 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
         val msgEnvelope = generateMessageEnvelope()
 
-        startKafka(bootstrapServers)
+        val (_, conf) = startKafka(bootstrapServers)
 
         //publish message first time
-        publishToKafka(Messages.jsonTopic, msgEnvelope)
+        publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
         Thread.sleep(3000)
 
-        consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic).ubirchPacket.getUUID mustBe
+        consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
 
-        val cacheError1 = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
+        val cacheError1 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
         cacheError1.exceptionName mustBe "NoCacheConnectionException"
 
       }
@@ -161,17 +160,17 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
         val msgEnvelope = generateMessageEnvelope()
         //publish message first time
-        publishToKafka(Messages.jsonTopic, msgEnvelope)
-        startKafka(bootstrapServers)
-        val cacheError1 = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
+        val (_, conf) = startKafka(bootstrapServers)
+        publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
+        val cacheError1 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
         cacheError1.exceptionName mustBe "NoCacheConnectionException"
-        consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic).ubirchPacket.getUUID mustBe
+        consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
 
         //publish message second time (replay attack)
-        publishToKafka(Messages.jsonTopic, msgEnvelope)
+        publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
-        val cacheError2 = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
+        val cacheError2 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
         cacheError2.exceptionName mustBe "NoCacheConnectionException"
 
       }
@@ -193,11 +192,11 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         val msgEnvelope1 = generateMessageEnvelope()
 
         //publish first message
-        publishToKafka(Messages.jsonTopic, msgEnvelope1)
-        startKafka(bootstrapServers)
-        consumeFirstMessageFrom[MessageEnvelope](Messages.encodingTopic).ubirchPacket.getUUID mustBe
+        val (_, conf) = startKafka(bootstrapServers)
+        publishToKafka(readConsumerTopicHead(conf), msgEnvelope1)
+        consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope1.ubirchPacket.getUUID
-        val cacheError1 = consumeFirstMessageFrom[FilterError](Messages.errorTopic)
+        val cacheError1 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
         cacheError1.exceptionName mustBe "NoCacheConnectionException"
         redis = new RedisServer(6379)
         redis.start()
@@ -205,10 +204,10 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
         //publish second message time
         val msgEnvelope2 = generateMessageEnvelope()
-        publishToKafka(Messages.jsonTopic, msgEnvelope2)
+        publishToKafka(readConsumerTopicHead(conf), msgEnvelope2)
 
         assertThrows[TimeoutException] {
-          consumeNumberMessagesFrom[FilterError](Messages.errorTopic, 2)
+          consumeNumberMessagesFrom[FilterError](readProducerErrorTopic(conf), 2)
         }
         redis.stop()
       }
