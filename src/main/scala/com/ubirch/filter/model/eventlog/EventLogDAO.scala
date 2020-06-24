@@ -9,7 +9,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 /**
   * Represents the queries linked to the EventLogRow case class and to the Events Table
   */
-trait EventLogQueries extends TablePointer[EventLogRow] with CustomEncodings[EventLogRow] {
+trait EventLogQueries extends TablePointer[EventLogRow] {
 
   import db._
 

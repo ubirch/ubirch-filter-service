@@ -18,13 +18,13 @@ package com.ubirch.filter.model.cache
 
 import java.net.UnknownHostException
 
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{ Config, ConfigFactory }
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.services.Lifecycle
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 import monix.execution.Scheduler
 import org.redisson.Redisson
-import org.redisson.api.{RedissonClient, RMap}
+import org.redisson.api.{ RedissonClient, RMap }
 
 import scala.concurrent.duration._
 import scala.concurrent.Future

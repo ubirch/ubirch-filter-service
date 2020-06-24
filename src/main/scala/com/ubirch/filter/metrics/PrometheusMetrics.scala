@@ -16,12 +16,12 @@
 
 package com.ubirch.filter.metrics
 
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{ Config, ConfigFactory }
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.metrics.PrometheusMetricsHelper
 import io.prometheus.client.exporter.HTTPServer
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 
 import scala.concurrent.Future
 
