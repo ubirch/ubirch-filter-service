@@ -65,6 +65,8 @@
         <scala.version>2.12.6</scala.version>
         <scala.compat.version>2.12</scala.compat.version>
         <io.monix.version>2.3.2</io.monix.version>
+        <guice.version>4.1.0</guice.version>
+        <embedded-cassandra-test>1.2.9</embedded-cassandra-test>
 
         <!-- plugins -->
         <scala-maven-plugin.version>3.3.2</scala-maven-plugin.version>
@@ -78,6 +80,7 @@
         <scalatest.version>3.0.5</scalatest.version>
         <mockito.version>2.23.4</mockito.version>
         <maven-dependency-plugin.version>2.8</maven-dependency-plugin.version>
+        <scalariform.version>0.2.3</scalariform.version>
         <!-- plugins -->
 
     </properties>
@@ -94,8 +97,66 @@
 
         <dependency>
             <groupId>com.ubirch</groupId>
-            <artifactId>event-log-kafka</artifactId>
-            <version>1.2.4-SNAPSHOT</version>
+            <artifactId>ubirch-kafka-express</artifactId>
+            <version>1.2.11-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.ubirch</groupId>
+            <artifactId>event-log-util</artifactId>
+            <version>1.2.5-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.ubirch</groupId>
+            <artifactId>ubirch-crypto</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.inject</groupId>
+            <artifactId>guice</artifactId>
+            <version>${guice.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.nosan</groupId>
+            <artifactId>embedded-cassandra-test</artifactId>
+            <version>${embedded-cassandra-test}</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk15on -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk15on</artifactId>
+            <version>1.65.01</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient</artifactId>
+            <version>0.9.0</version>
+        </dependency>
+
+
+        <!-- https://mvnrepository.com/artifact/io.getquill/quill-cassandra-monix -->
+        <dependency>
+            <groupId>io.getquill</groupId>
+            <artifactId>quill-cassandra-monix_${scala.compat.version}</artifactId>
+            <version>3.4.10</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.getquill</groupId>
+            <artifactId>quill-cassandra_${scala.compat.version}</artifactId>
+            <version>3.4.10</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.lihaoyi/os-lib -->
+        <dependency>
+            <groupId>com.lihaoyi</groupId>
+            <artifactId>os-lib_2.12</artifactId>
+            <version>0.7.0</version>
         </dependency>
 
         <dependency>
@@ -115,13 +176,6 @@
             <groupId>org.redisson</groupId>
             <artifactId>redisson</artifactId>
             <version>3.10.5</version>
-        </dependency>
-
-        <!-- https://mvnrepository.com/artifact/com.softwaremill.sttp/core -->
-        <dependency>
-            <groupId>com.softwaremill.sttp</groupId>
-            <artifactId>core_2.12</artifactId>
-            <version>1.5.19</version>
         </dependency>
 
         <dependency>
@@ -167,6 +221,36 @@
     <build>
 
         <plugins>
+
+            <!-- code formatting -->
+            <plugin>
+                <groupId>com.github.tashoyan</groupId>
+                <artifactId>scalariform-maven-plugin</artifactId>
+                <version>${scalariform.version}</version>
+                <executions>
+                    <execution>
+                        <phase>process-sources</phase>
+                        <goals>
+                            <goal>format</goal>
+                        </goals>
+                        <configuration>
+                            <firstArgumentOnNewline>Force</firstArgumentOnNewline>
+                            <firstParameterOnNewline>Force</firstParameterOnNewline>
+                            <allowParamGroupsOnNewlines>true</allowParamGroupsOnNewlines>
+                            <danglingCloseParenthesis>Force</danglingCloseParenthesis>
+                            <doubleIndentConstructorArguments>true</doubleIndentConstructorArguments>
+                            <doubleIndentMethodDeclaration>true</doubleIndentMethodDeclaration>
+                            <newlineAtEndOfFile>true</newlineAtEndOfFile>
+                            <placeScaladocAsterisksBeneathSecondAsterisk>true
+                            </placeScaladocAsterisksBeneathSecondAsterisk>
+                            <singleCasePatternOnNewline>false</singleCasePatternOnNewline>
+                            <spacesAroundMultiImports>true</spacesAroundMultiImports>
+                            <rewriteArrowSymbols>false</rewriteArrowSymbols>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- code formatting -->
 
             <plugin>
                 <!-- see http://davidb.github.com/scala-maven-plugin -->

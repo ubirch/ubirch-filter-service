@@ -14,32 +14,19 @@
  * limitations under the License.
  */
 
-package com.ubirch.filter.cache
+package com.ubirch.filter.model.cache
 
-import java.util.concurrent.TimeoutException
+case class NoCacheConnectionException(
+    private val message: String = "",
+    private val cause: Throwable = None.orNull
+) extends Exception(message, cause)
 
-/**
-  * Different cache mocks for testing purposes.
-  */
+trait Cache {
 
-class CacheMockAlwaysException extends Cache {
+  @throws[NoCacheConnectionException]
+  def get(hash: String): Boolean
 
-  def get(payload: String): Boolean = throw new TimeoutException()
-
-  def set(payload: String): Boolean = throw new TimeoutException()
-}
-
-class CacheMockAlwaysFalse extends Cache {
-
-  def get(payload: String): Boolean = false
-
-  def set(payload: String): Boolean = false
-}
-
-class CacheMockAlwaysTrue extends Cache {
-
-  def get(payload: String): Boolean = true
-
-  def set(payload: String): Boolean = true
+  @throws[NoCacheConnectionException]
+  def set(hash: String): Boolean
 }
 
