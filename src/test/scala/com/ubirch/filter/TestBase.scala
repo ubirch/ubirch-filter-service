@@ -1,22 +1,22 @@
 package com.ubirch.filter
 
 import com.typesafe.config.Config
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
 import net.manub.embeddedkafka.EmbeddedKafka
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers, WordSpec}
+import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers, WordSpec }
 import org.scalatest.concurrent.ScalaFutures
 import os.proc
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration.Duration
 
 trait TestBase
   extends WordSpec
-    with ScalaFutures
-    with BeforeAndAfterEach
-    with BeforeAndAfterAll
-    with MustMatchers
-    with EmbeddedKafka {
+  with ScalaFutures
+  with BeforeAndAfterEach
+  with BeforeAndAfterAll
+  with MustMatchers
+  with EmbeddedKafka {
 
   def await[T](future: Future[T]): T = await(future, Duration.Inf)
 
@@ -29,12 +29,6 @@ trait TestBase
   def readProducerErrorTopic(conf: Config): String = conf.getString(ProducerConfPaths.ERROR_TOPIC)
   def readProducerRejectionTopic(conf: Config): String = conf.getString(ProducerConfPaths.REJECTION_TOPIC)
 
-  // TODO: remove that before pushing
-  // val conf = Injector.get[Config]
-  // Messages.jsonTopic -> readConsumerTopicHead(conf)
-  // Messages.rejectionTopic -> readProducerRejectionTopic(conf)
-  // MEssages.errorTopic -> readProducerErrorTopic(conf)
-  // Message.encodingTopic -> readProducerForwardTopic(conf)
 }
 
 object TestBase {

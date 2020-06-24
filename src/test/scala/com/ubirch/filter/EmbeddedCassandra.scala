@@ -1,7 +1,7 @@
 package com.ubirch.filter
 
 import com.github.nosan.embedded.cassandra.cql.CqlScript
-import com.github.nosan.embedded.cassandra.local.{LocalCassandraFactory, LocalCassandraFactoryBuilder}
+import com.github.nosan.embedded.cassandra.local.{ LocalCassandraFactory, LocalCassandraFactoryBuilder }
 import com.github.nosan.embedded.cassandra.test.TestCassandra
 import com.typesafe.scalalogging.LazyLogging
 import os.proc

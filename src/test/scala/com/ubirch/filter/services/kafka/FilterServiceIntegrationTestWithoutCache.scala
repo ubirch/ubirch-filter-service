@@ -16,24 +16,24 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.{Base64, UUID}
+import java.util.{ Base64, UUID }
 import java.util.concurrent.TimeoutException
 
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
-import com.typesafe.config.{Config, ConfigValueFactory}
+import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
-import com.ubirch.filter.model.{FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer}
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
+import com.ubirch.filter.model.{ FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer }
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
-import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
-import org.apache.kafka.common.serialization.{Deserializer, Serializer}
-import org.json4s.JsonAST.{JObject, JString}
+import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
+import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
+import org.json4s.JsonAST.{ JObject, JString }
 import org.scalatest.BeforeAndAfter
 import os.proc
 import redis.embedded.RedisServer
@@ -47,7 +47,6 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
   implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
   implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
-
 
   override protected def beforeAll(): Unit = {
     startCassandra()
@@ -67,13 +66,13 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
       ConsumerConfPaths.BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-      ProducerConfPaths.BOOTSTRAP_SERVERS,
-      ConfigValueFactory.fromAnyRef(bootstrapServers)
-    )
+        ProducerConfPaths.BOOTSTRAP_SERVERS,
+        ConfigValueFactory.fromAnyRef(bootstrapServers)
+      )
   }
 
   /**
-  * Simple Guice injector that mimicate the default one but replace the bootstrap and consumer topics by the provided one
+    * Simple Guice injector that mimicate the default one but replace the bootstrap and consumer topics by the provided one
     */
   def FakeSimpleInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
     override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
@@ -100,7 +99,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
   var redis: RedisServer = _
 
   /**
-  * Start and return a DefaultFilterService as well as its config
+    * Start and return a DefaultFilterService as well as its config
     */
   def startKafka(bootstrapServers: String): (FilterService, Config) = {
 

@@ -1,7 +1,7 @@
 package com.ubirch.filter.model.eventlog
 
 import io.getquill.context.cassandra.CassandraContext
-import io.getquill.context.cassandra.encoding.{Decoders, Encoders}
+import io.getquill.context.cassandra.encoding.{ Decoders, Encoders }
 
 /**
   * Cassandra Context DB value.

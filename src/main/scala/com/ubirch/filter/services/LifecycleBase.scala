@@ -31,7 +31,7 @@ trait Lifecycle {
 @Singleton
 class DefaultLifecycle @Inject() (implicit ec: ExecutionContext)
   extends Lifecycle
-    with LazyLogging {
+  with LazyLogging {
 
   private val hooks = new ConcurrentLinkedDeque[() => Future[_]]()
 
@@ -87,8 +87,7 @@ class DefaultJVMHook @Inject() (lifecycle: Lifecycle)(implicit ec: ExecutionCont
             logger.error("Error running jvm hook={}", e.getMessage)
             countDownLatch.countDown()
         }
-
-        val res = countDownLatch.await(5000, TimeUnit.SECONDS) //Waiting 5 secs
+        val res = countDownLatch.await(5, TimeUnit.SECONDS) //Waiting 5 secs
         if (!res) logger.warn("Taking too much time shutting down :(  ..")
         else logger.info("Bye bye, see you later...")
       }

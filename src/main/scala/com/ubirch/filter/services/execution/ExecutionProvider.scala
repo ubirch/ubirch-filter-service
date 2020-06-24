@@ -3,10 +3,10 @@ package com.ubirch.filter.services.execution
 import java.util.concurrent.Executors
 
 import com.typesafe.config.Config
-import javax.inject.{Inject, Provider, Singleton}
+import javax.inject.{ Inject, Provider, Singleton }
 import monix.execution.Scheduler
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor }
 
 /**
   * Represents the Execution Context Component used in the system

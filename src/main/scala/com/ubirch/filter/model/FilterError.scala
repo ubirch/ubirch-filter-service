@@ -19,7 +19,7 @@ package com.ubirch.filter.model
 import java.util.Date
 
 import org.apache.kafka.common.serialization.Deserializer
-import org.json4s.{DefaultFormats, Formats}
+import org.json4s.{ DefaultFormats, Formats }
 import org.json4s.ext.JavaTypesSerializers
 import org.json4s.jackson.Serialization.read
 
@@ -40,12 +40,14 @@ import org.json4s.jackson.Serialization.read
   * @param errorTime     represents the time when the error occurred
   * @param serviceName   represents the name of the service. By default, we use, error-service.
   */
-case class FilterError(key: String,
-                       message: String,
-                       exceptionName: String,
-                       value: String = "",
-                       errorTime: Option[Date] = Some(new java.util.Date()),
-                       serviceName: String = "filter-service") {
+case class FilterError(
+    key: String,
+    message: String,
+    exceptionName: String,
+    value: String = "",
+    errorTime: Option[Date] = Some(new java.util.Date()),
+    serviceName: String = "filter-service"
+) {
 
   override def toString: String = {
     "{\"key\":\"" + key + "\"," +

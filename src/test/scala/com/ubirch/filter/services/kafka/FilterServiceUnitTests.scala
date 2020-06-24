@@ -21,27 +21,21 @@ import java.nio.charset.StandardCharsets.UTF_8
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
-import com.ubirch.filter.cache.{Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
-import com.ubirch.filter.model.eventlog.CassandraFinder
-import com.ubirch.filter.services.Lifecycle
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper }
+import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue }
 import com.ubirch.filter.ConfPaths.ProducerConfPaths
 import com.ubirch.filter.model.Values
 import com.ubirch.kafka.MessageEnvelope
-import com.ubirch.kafka.consumer.ConsumerRunner
-import com.ubirch.kafka.producer.ProducerRunner
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
-import javax.inject.{Inject, Singleton}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.json4s.JObject
-import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
+import org.scalatest.{ BeforeAndAfterAll, MustMatchers, WordSpec }
 import org.scalatest.mockito.MockitoSugar
 
 import scala.collection.breakOut
 import scala.collection.JavaConverters._
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
 /**
@@ -58,14 +52,12 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     stopCassandra()
   }
 
-
   val cr = new ConsumerRecord[String, String]("topic", 1, 1, "1234", "false")
   val data = ProcessingData(cr, "")
 
   def FakeFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {
     override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
   })) {}
-
 
   def ExceptionFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {
     override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[ExceptionFilterServ])
@@ -219,40 +211,5 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     }
   }
 
-}
-
-/**
-  * A fake filter service using mocked Kafka consumer, producer and cache. The send method counts it's calls.
-  *
-  * @param cache The cache used to check if a message has already been received before.
-  */
-@Singleton
-class FakeFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, cassandraFinder, config, lifecycle) with MockitoSugar {
-  override lazy val consumption: ConsumerRunner[String, String] = mock[ConsumerRunner[String, String]]
-  override lazy val production: ProducerRunner[String, String] = mock[ProducerRunner[String, String]]
-
-  var counter = 0
-
-  override def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = {
-    counter = 1
-    Future(mock[RecordMetadata])
-  }
-
-  override def send(topic: String, value: String): Future[RecordMetadata] = {
-    counter = 1
-    Future(mock[RecordMetadata])
-  }
-}
-
-/**
-  * A filter service, that always throws an exception when the send method is called.
-  */
-@Singleton
-class ExceptionFilterService @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, cassandraFinder, config, lifecycle) with MockitoSugar {
-  override def send(topic: String, value: String): Future[RecordMetadata] = {
-    Future {
-      throw new Exception("test exception")
-    }
-  }
 }
 

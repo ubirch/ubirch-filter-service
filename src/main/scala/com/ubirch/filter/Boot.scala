@@ -16,7 +16,7 @@
 
 package com.ubirch.filter
 
-import com.google.inject.{Guice, Injector, Module}
+import com.google.inject.{ Guice, Injector, Module }
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.metrics.PrometheusMetrics
 

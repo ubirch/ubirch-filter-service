@@ -16,46 +16,40 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.{Base64, UUID}
+import java.util.{ Base64, UUID }
 import java.util.concurrent.TimeoutException
 
 import com.github.nosan.embedded.cassandra.cql.CqlScript
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
-import com.typesafe.config.{Config, ConfigValueFactory}
+import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
-import com.ubirch.filter.cache.{Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
-import com.ubirch.filter.model._
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
+import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, _ }
+import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue, CustomCache }
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.util.Messages
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
-import com.ubirch.filter.model.eventlog.{CassandraFinder, Finder}
-import com.ubirch.filter.models.CassandraFinderAlwaysFound
-import com.ubirch.filter.services.Lifecycle
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
+import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
-import javax.inject.{Inject, Singleton}
-import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
+import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.RecordMetadata
-import org.apache.kafka.common.serialization.{Deserializer, Serializer}
+import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
 import org.json4s.JsonAST._
 import org.scalatest._
 import os.proc
 import redis.embedded.RedisServer
 
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ Await, ExecutionContext }
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-
 /**
- * This class provides all integration tests, except for those testing a missing redis connection on startup.
- * The Kafka config has to be inside each single test to enable parallel testing with different ports.
- */
+  * This class provides all integration tests, except for those testing a missing redis connection on startup.
+  * The Kafka config has to be inside each single test to enable parallel testing with different ports.
+  */
 class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
@@ -66,26 +60,24 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
   var redis: RedisServer = _
 
   /**
-  * Overwrite default bootstrap server and topic values of the kafka consumer and producers
+    * Overwrite default bootstrap server and topic values of the kafka consumer and producers
     */
   def customTestConfigProvider(bootstrapServers: String): ConfigProvider = new ConfigProvider {
     override def conf: Config = super.conf.withValue(
       ConsumerConfPaths.BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-      ProducerConfPaths.BOOTSTRAP_SERVERS,
-      ConfigValueFactory.fromAnyRef(bootstrapServers)
-    )
+        ProducerConfPaths.BOOTSTRAP_SERVERS,
+        ConfigValueFactory.fromAnyRef(bootstrapServers)
+      )
   }
 
-
   /**
-  * Simple injector that replaces the kafka bootstrap server and topics to the given ones
+    * Simple injector that replaces the kafka bootstrap server and topics to the given ones
     */
   def FakeSimpleInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
     override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
   })) {}
-
 
   override protected def beforeAll(): Unit = {
     startCassandra()
@@ -97,9 +89,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
   }
 
   /**
-   * Method killing any embedded redis application, in case an earlier test was aborted without executing after.
-   * Starting a new embedded redis server for testing purposes.
-   */
+    * Method killing any embedded redis application, in case an earlier test was aborted without executing after.
+    * Starting a new embedded redis server for testing purposes.
+    */
   before {
     try {
       val embeddedRedisPid = getPidOfServiceUsingGivenPort(6379)
@@ -112,10 +104,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
     redis.start()
   }
 
-
   /**
-   * Called after all tests. Not working always unfortunately.
-   */
+    * Called after all tests. Not working always unfortunately.
+    */
   after {
     logger.info("Shutting off test services")
     logger.info("Shutting off test services - REDIS")
@@ -131,7 +122,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
   }
 
   override protected def afterEach(): Unit = {
-    while(EmbeddedKafka.isRunning) {
+    while (EmbeddedKafka.isRunning) {
       logger.info("Kafka still running...")
       Thread.sleep(1000)
       EmbeddedKafka.stop()
@@ -140,11 +131,11 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
   }
 
   /**
-   * Method to generate a message envelope as expected by the filter service.
-   *
-   * @param payload Payload is a random value if not defined explicitly.
-   * @return
-   */
+    * Method to generate a message envelope as expected by the filter service.
+    *
+    * @param payload Payload is a random value if not defined explicitly.
+    * @return
+    */
   private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
 
     val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
@@ -178,8 +169,8 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
         val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Messages.foundInCacheMsg
-        rejection.rejectionName mustBe Messages.replayAttackName
+        rejection.message mustBe Values.FOUND_IN_CACHE_MESSAGE
+        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
       }
     }
 
@@ -187,7 +178,6 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
-
 
       def FakeInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
@@ -206,8 +196,8 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
         val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Messages.foundInVerificationMsg
-        rejection.rejectionName mustBe Messages.replayAttackName
+        rejection.message mustBe Values.FOUND_IN_VERIFICATION_MESSAGE
+        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
       }
 
     }
@@ -228,7 +218,6 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
         publishToKafka[String](readConsumerTopicHead(conf), "unparseable example message")
 
-
         val consumer: DefaultFilterService = Injector.get[DefaultFilterService]
         consumer.consumption.startPolling()
         Thread.sleep(1000)
@@ -241,7 +230,6 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
           consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
         }
       }
-
 
     }
 
@@ -261,7 +249,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         val Injector = FakeInjectorCustomCache(customTestConfigProvider(bootstrapServers))
         val conf = Injector.get[Config]
 
-        val fakeFilterService = Injector.get[AbstractFilterService]
+        val fakeFilterService = Injector.get[ExceptionFilterServ]
 
         val cache = Injector.get[Cache].asInstanceOf[CustomCache]
         fakeFilterService.consumption.startPolling()
@@ -300,15 +288,14 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
             ConsumerConfPaths.BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-            ProducerConfPaths.BOOTSTRAP_SERVERS,
-            ConfigValueFactory.fromAnyRef(bootstrapServers)
-          ).withValue(
-            FilterConfPaths.FILTER_STATE,
-            ConfigValueFactory.fromAnyRef(false)
-          )
+              ProducerConfPaths.BOOTSTRAP_SERVERS,
+              ConfigValueFactory.fromAnyRef(bootstrapServers)
+            ).withValue(
+                FilterConfPaths.FILTER_STATE,
+                ConfigValueFactory.fromAnyRef(false)
+              )
         })
       })) {}
-
 
       withRunningKafka {
 
@@ -327,7 +314,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
     }
 
     /**
-    * Here we set the filter state to non active (should always forward the message) BUT the env = prod, so it should
+      * Here we set the filter state to non active (should always forward the message) BUT the env = prod, so it should
       * still check if redis / cassi is up or not and forward accordingly
       */
     "not forward all messages when activeState equals false and env = prod" in {
@@ -341,19 +328,18 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
             ConsumerConfPaths.BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-            ProducerConfPaths.BOOTSTRAP_SERVERS,
-            ConfigValueFactory.fromAnyRef(bootstrapServers)
-          ).withValue(
-            FilterConfPaths.ENVIRONMENT,
-            ConfigValueFactory.fromAnyRef(Values.PRODUCTION_NAME)
-          ).withValue(
-            FilterConfPaths.FILTER_STATE,
-            ConfigValueFactory.fromAnyRef(false)
-          )
+              ProducerConfPaths.BOOTSTRAP_SERVERS,
+              ConfigValueFactory.fromAnyRef(bootstrapServers)
+            ).withValue(
+                FilterConfPaths.ENVIRONMENT,
+                ConfigValueFactory.fromAnyRef(Values.PRODUCTION_NAME)
+              ).withValue(
+                  FilterConfPaths.FILTER_STATE,
+                  ConfigValueFactory.fromAnyRef(false)
+                )
         })
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
       })) {}
-
 
       withRunningKafka {
 
@@ -368,8 +354,8 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         Thread.sleep(1000)
 
         val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Messages.foundInCacheMsg
-        rejection.rejectionName mustBe Messages.replayAttackName
+        rejection.message mustBe Values.FOUND_IN_CACHE_MESSAGE
+        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
       }
     }
   }
@@ -437,10 +423,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         Thread.sleep(1000)
 
         val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Messages.foundInVerificationMsg
-        rejection.rejectionName mustBe Messages.replayAttackName
+        rejection.message mustBe Values.FOUND_IN_VERIFICATION_MESSAGE
+        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
       }
-
 
     }
 
@@ -502,36 +487,4 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 }
 
 // Some classes have to be defined outside of the functions that uses them, as Guice does not support injecting into inner classes
-
-/**
-  * A fake filter service that always throws an exception, when the send() method is called.
-  *
-  * @param cache The cache is only used to record the messages being processed in this test.
-  */
-@Singleton
-class ExceptionFilterServ @Inject()(cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends AbstractFilterService(cache, cassandraFinder, config, lifecycle) {
-  override def send(topic: String, value: String): Future[RecordMetadata] = {
-    Future {
-      throw new Exception("test exception")
-    }
-  }
-}
-
-/**
-  * just a cache variable that records what messages are being processed by the filter service
-  */
-@Singleton
-class CustomCache extends Cache {
-  var list: List[String] = List[String]()
-
-  def get(hash: String): Boolean = {
-    list = list :+ hash
-    false
-  }
-
-  def set(hash: String): Boolean = {
-    false
-  }
-}
-
 

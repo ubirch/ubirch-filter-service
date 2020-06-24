@@ -8,8 +8,6 @@ import org.json4s.JsonDSL._
 
 import scala.util.control.NonFatal
 
-
-
 /**
   * Object that contains all customized serializers
   */
@@ -94,13 +92,13 @@ class EventLogSerializer extends CustomSerializer[EventLog](_ =>
               (LOOKUP_KEYS_CATEGORY -> x.category) ~
               (LOOKUP_KEYS_KEY -> (
                 (LOOKUP_KEYS_NAME -> x.key.name) ~
-                  (LOOKUP_KEYS_LABEL -> x.key.label)
-                )) ~
-              (LOOKUP_KEYS_VALUE -> x.value.map { v =>
-                (LOOKUP_KEYS_NAME -> v.name) ~
-                  (LOOKUP_KEYS_LABEL -> v.label) ~
-                  (LOOKUP_KEYS_VALUE_EXTRA -> v.extra)
-              })
+                (LOOKUP_KEYS_LABEL -> x.key.label)
+              )) ~
+                (LOOKUP_KEYS_VALUE -> x.value.map { v =>
+                  (LOOKUP_KEYS_NAME -> v.name) ~
+                    (LOOKUP_KEYS_LABEL -> v.label) ~
+                    (LOOKUP_KEYS_VALUE_EXTRA -> v.extra)
+                })
           })
 
   }))
@@ -120,6 +118,6 @@ class HeadersSerializer extends CustomSerializer[Headers](_ => (
       }
 
   }, {
-  case headers: Headers => headers.toMap
-}
+    case headers: Headers => headers.toMap
+  }
 ))

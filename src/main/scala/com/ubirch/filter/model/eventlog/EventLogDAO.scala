@@ -1,12 +1,10 @@
 package com.ubirch.filter.model.eventlog
 
-
 import com.ubirch.filter.services.cluster.ConnectionService
-import io.getquill.{CassandraAsyncContext, SnakeCase}
+import io.getquill.{ CassandraAsyncContext, SnakeCase }
 import javax.inject._
 
-import scala.concurrent.{ExecutionContext, Future}
-
+import scala.concurrent.{ ExecutionContext, Future }
 
 /**
   * Represents the queries linked to the EventLogRow case class and to the Events Table
@@ -32,7 +30,7 @@ trait EventLogQueries extends TablePointer[EventLogRow] with CustomEncodings[Eve
   * @param ec Represent the execution context for asynchronous processing.
   */
 @Singleton
-class EventsDAO @Inject()(val connectionService: ConnectionService)(implicit val ec: ExecutionContext) extends EventLogQueries {
+class EventsDAO @Inject() (val connectionService: ConnectionService)(implicit val ec: ExecutionContext) extends EventLogQueries {
 
   val db: CassandraAsyncContext[SnakeCase.type] = connectionService.context
 

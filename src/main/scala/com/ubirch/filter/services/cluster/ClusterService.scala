@@ -5,7 +5,7 @@ import java.net.InetSocketAddress
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RoundRobinPolicy
 import com.typesafe.config.Config
-import com.ubirch.filter.util.Exceptions.{InvalidConsistencyLevel, InvalidContactPointsException, NoContactPointsException}
+import com.ubirch.filter.util.Exceptions.{ InvalidConsistencyLevel, InvalidContactPointsException, NoContactPointsException }
 import com.ubirch.filter.ConfPaths.CassandraClusterConfPaths
 import javax.inject._
 

@@ -59,17 +59,17 @@ trait JValueEventLog extends EventLogBase[JValue]
   * @param nonce         Represents a value that can be used to calculate the hash of the event.
   */
 case class EventLog(
-                     headers: Headers,
-                     id: String,
-                     customerId: String,
-                     serviceClass: String,
-                     category: String,
-                     event: JValue,
-                     eventTime: Date,
-                     signature: String,
-                     nonce: String,
-                     lookupKeys: Seq[LookupKey]
-                   ) extends JValueEventLog {
+    headers: Headers,
+    id: String,
+    customerId: String,
+    serviceClass: String,
+    category: String,
+    event: JValue,
+    eventTime: Date,
+    signature: String,
+    nonce: String,
+    lookupKeys: Seq[LookupKey]
+) extends JValueEventLog {
 
   override def withNewId(id: String): EventLog = this.copy(id = id)
 

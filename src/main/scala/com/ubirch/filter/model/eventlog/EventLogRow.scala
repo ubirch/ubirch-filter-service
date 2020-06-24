@@ -25,17 +25,16 @@ import org.json4s.JValue
   */
 
 case class EventLogRow(
-                        id: String,
-                        customerId: String,
-                        serviceClass: String,
-                        category: String,
-                        event: JValue,
-                        eventTime: Date,
-                        eventTimeInfo: TimeInfo,
-                        signature: String,
-                        nonce: String
-                      )
-
+    id: String,
+    customerId: String,
+    serviceClass: String,
+    category: String,
+    event: JValue,
+    eventTime: Date,
+    eventTimeInfo: TimeInfo,
+    signature: String,
+    nonce: String
+)
 
 /**
   * This case class represents the the explicit values of the event time on the cassandra db.

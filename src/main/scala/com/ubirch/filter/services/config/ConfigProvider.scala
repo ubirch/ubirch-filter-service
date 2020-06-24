@@ -1,7 +1,7 @@
 package com.ubirch.filter.services.config
 
-import com.typesafe.config.{Config, ConfigFactory}
-import javax.inject.{Provider, Singleton}
+import com.typesafe.config.{ Config, ConfigFactory }
+import javax.inject.{ Provider, Singleton }
 
 /**
   * Configuration Provider for the Configuration Component.

@@ -22,18 +22,18 @@ import java.util.concurrent.TimeoutException
 import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.cache.{Cache, NoCacheConnectionException}
-import com.ubirch.filter.model.{FilterError, Rejection, Values}
+import com.ubirch.filter.model.cache.{ Cache, NoCacheConnectionException }
+import com.ubirch.filter.model.{ FilterError, Rejection, Values }
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.util.Messages
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.MessageEnvelope
+import com.ubirch.kafka._
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
@@ -42,12 +42,10 @@ import org.json4s.jackson.JsonMethods.parse
 
 import scala.collection.immutable
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Success
-
-
 
 case class ProcessingData(cr: ConsumerRecord[String, String], payload: String)
 
@@ -64,7 +62,7 @@ trait FilterService {
 
   /**
     * Method that checks if the hash/payload has been processed earlier of the event-log system
-    * and publishes and logs error messages in case of failure. In case the lookup service is
+    * and publishes and logs error messages in case of failure. In case the cassandra connection is
     * down an exception is thrown to make the underlying Kafka app wait before continuing with
     * processing the same messages once more.
     *
@@ -77,18 +75,7 @@ trait FilterService {
   def makeVerificationLookup(data: ProcessingData): Future[Option[String]]
 
   /**
-    * Method that checks the cache regarding earlier processing of a message with the same{
-    * *
-    * implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
-    * val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
-    * send(producerRejectionTopic, rj.toString.getBytes())
-    * .recoverWith {
-    * case _ => send(producerRejectionTopic, rj.toString.getBytes())
-    * }.recoverWith { case ex: Exception =>
-    * pauseKafkaConsumption(s"kafka error: ${rj.toString} could not be send to topic ${producerRejectionTopic}", cr, ex, 2 seconds)
-    * }.map { x => Some(x) }
-    * }
-    *
+    * Method that checks the cache regarding earlier processing of a message with the same
     * hash/payload and publishes and logs error messages in case of failure.
     *
     * @param data The data to become processed.
@@ -116,7 +103,7 @@ trait FilterService {
     * before continuing with processing the same messages once more.
     *
     * @param cr               The consumer record of the replay attack.
-
+    *
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
   def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
@@ -184,12 +171,12 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
           forwardUPP(data)
         } else {
           if (cacheContainsHash(data)) {
-            reactOnReplayAttack(cr, Messages.foundInCacheMsg)
+            reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
           } else {
             makeVerificationLookup(data).flatMap {
               case Some(_) =>
                 logger.debug("Found a match in cassandra, launching reactOnReplayAttack")
-                reactOnReplayAttack(cr, Messages.foundInVerificationMsg)
+                reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
               case None =>
                 logger.debug("Found no match in cassandra")
                 forwardUPP(data)
@@ -202,7 +189,6 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
     Future.sequence(futureResponse).map(_ => ())
 
   }
-
 
   def extractData(cr: ConsumerRecord[String, String]): Option[MessageEnvelope] = {
     try {
@@ -249,7 +235,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
   }
 
   /**
-  * Sometimes the payload contains " at the beginning and the end of the payload, which makes cassandra go nuts and prevent
+    * Sometimes the payload contains " at the beginning and the end of the payload, which makes cassandra go nuts and prevent
     * the value from being found
     * @param payload the payload to (eventually) trim
     * @return a trimmed string on which the first and last char will not be "
@@ -271,10 +257,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
       case ex: Exception =>
         publishErrorMessage(s"unable to add ${data.cr.key()} to cache.", data.cr, ex)
     }
-    val result = send(producerForwardTopic, data.cr.value())
-      .recoverWith { case _ => send(producerForwardTopic, data.cr.value()) }
+    val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
+      .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
       .recoverWith { case ex =>
-        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to ${producerForwardTopic}", data.cr, ex, 2 seconds)
+        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to $producerForwardTopic", data.cr, ex, 2 seconds)
       }
     result.onComplete {
       case Success(_) => logger.info("successfully forwarded consumer record with key: {}", data.cr.key())
@@ -286,16 +272,17 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
   protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = production.send(producerRecord)
 
   /**
-  * Helper method that generates the producer record that will be sent when a replay attack is detected
+    * Helper method that generates the producer record that will be sent when a replay attack is detected
     * @param cr The consumerRecord on which to act
     * @param rejectionMessage why the message was rejected
     * @return a producer record with the correct HTTP headers and value
     */
   def generateReplayAttackProducerRecord(cr: ConsumerRecord[String, String], rejectionMessage: String): ProducerRecord[String, String] = {
-    implicit val rejectionFormats: DefaultFormats.type = DefaultFormats
-    val rj = Rejection(cr.key, rejectionMessage, Messages.replayAttackName)
-    val headers = (cr.headers().toArray :+ new RecordHeader(Values.HTTP_STATUS_CODE_HEADER, Values.HTTP_STATUS_CODE_REJECTION_ERROR.getBytes(UTF_8))).toIterable.asJava
-    new ProducerRecord[String, String](producerRejectionTopic, null, cr.key(), rj.toString, headers)
+    cr.toProducerRecord(
+      topic = producerRejectionTopic,
+      headers = (cr.headers().toArray :+ new RecordHeader(Values.HTTP_STATUS_CODE_HEADER, Values.HTTP_STATUS_CODE_REJECTION_ERROR.getBytes(UTF_8))).toIterable.asJava,
+      value = Rejection(cr.key, rejectionMessage, Values.REPLAY_ATTACK_NAME).toString
+    )
   }
 
   def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
@@ -304,8 +291,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
       .recoverWith {
         case _ => send(producerRecordToSend)
       }.recoverWith { case ex: Exception =>
-      pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, 2 seconds)
-    }.map { x => Some(x) }
+        pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, 2 seconds)
+      }.map { x => Some(x) }
   }
 
   /**
@@ -316,12 +303,18 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(errorMessage: String,
-                                  cr: ConsumerRecord[String, String],
-                                  ex: Throwable): Future[Any] = {
+  private def publishErrorMessage(
+      errorMessage: String,
+      cr: ConsumerRecord[String, String],
+      ex: Throwable
+  ): Future[Any] = {
 
     logger.error(errorMessage, ex.getMessage, ex)
-    send(producerErrorTopic, FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString.replace("\"", "\\\"")).toString)
+    val producerRecordToSend = cr.toProducerRecord(
+      topic = producerErrorTopic,
+      value = FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString.replace("\"", "\\\"")).toString
+    )
+    send(producerRecordToSend)
       .recover { case _ => logger.error(s"failure publishing to error topic: $errorMessage") }
   }
 
@@ -337,20 +330,21 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
   }
 }
 
-/** * This service is responsible to check incoming messages for any suspicious
- * behaviours as for example replay attacks. Till now, this is the only check being done.
- * It processes Kafka messages, making first a lookup in it's own cache to see if a message
- * with the same hash/payload has been send already, if the cache is down or nothing was found,
- * a ubirch lookup service is questioned if the hash/payload has already been processed by the
- * event-log. Only if no replay attack was found the message is forwarded to the event-log system.
- *
- * @param cache The cache used to check if a message has already been received before.
- * @param finder The finder used to check if a message has already been received before in the event log in case
- *               the cache is down
- * @param config The config file containing the configuration needed for the service
- * @author ${user.name}
- */
+/**
+  * * This service is responsible to check incoming messages for any suspicious
+  * behaviours as for example replay attacks. Till now, this is the only check being done.
+  * It processes Kafka messages, making first a lookup in it's own cache to see if a message
+  * with the same hash/payload has been send already, if the cache is down or nothing was found,
+  * a ubirch database is questioned if the hash/payload has already been processed by the
+  * event-log. Only if no replay attack was found the message is forwarded to the event-log system.
+  *
+  * @param cache The cache used to check if a message has already been received before.
+  * @param finder The finder used to check if a message has already been received before in the event log in case
+  *               the cache is down
+  * @param config The config file containing the configuration needed for the service
+  * @author ${user.name}
+  */
 @Singleton
-class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
+class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
 
 }
