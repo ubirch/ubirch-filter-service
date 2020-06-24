@@ -35,11 +35,11 @@ import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
 import org.json4s.JsonAST.{ JObject, JString }
 import org.scalatest.BeforeAndAfter
-import os.proc
 import redis.embedded.RedisServer
 
 import scala.language.postfixOps
 import scala.sys.process._
+import scala.util.Try
 
 class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
@@ -119,12 +119,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
       withRunningKafka {
 
-        try {
-          val embeddedRedisPid = getPidOfServiceUsingGivenPort(6379)
-          proc("kill", "-9", embeddedRedisPid).call()
-        } catch {
-          case _: Throwable =>
-        }
+        Try(redis.stop())
 
         val msgEnvelope = generateMessageEnvelope()
 

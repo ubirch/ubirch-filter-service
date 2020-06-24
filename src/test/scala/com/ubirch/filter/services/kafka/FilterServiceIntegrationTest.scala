@@ -93,12 +93,6 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
     * Starting a new embedded redis server for testing purposes.
     */
   before {
-    try {
-      val embeddedRedisPid = getPidOfServiceUsingGivenPort(6379)
-      proc("kill", "-9", embeddedRedisPid).call()
-    } catch {
-      case _: Throwable =>
-    }
     redis = new RedisServer(6379)
     Thread.sleep(1000)
     redis.start()
@@ -114,7 +108,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
     logger.info("Shutting off test services - EMBEDDED KAFKA")
     EmbeddedKafka.stop()
     EmbeddedKafka.stopZooKeeper()
-    Thread.sleep(10000)
+    Thread.sleep(1000)
   }
 
   override protected def beforeEach(): Unit = {

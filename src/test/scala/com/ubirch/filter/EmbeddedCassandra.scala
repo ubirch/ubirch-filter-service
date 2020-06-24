@@ -27,12 +27,6 @@ trait EmbeddedCassandra extends LazyLogging {
   }
   def stopCassandra(): Unit = {
     cassandra.stop()
-    try {
-      val embeddedRedisPid = TestBase.getPidOfServiceUsingGivenPort(9042)
-      proc("kill", "-9", embeddedRedisPid).call()
-    } catch {
-      case _: Throwable =>
-    }
   }
 
   val eventLogCreationCassandraStatement: CqlScript = CqlScript.statements(
