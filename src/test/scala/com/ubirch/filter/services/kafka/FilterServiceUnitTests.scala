@@ -24,7 +24,8 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper }
 import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue }
 import com.ubirch.filter.ConfPaths.ProducerConfPaths
-import com.ubirch.filter.model.Values
+import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, Values }
+import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
@@ -35,7 +36,7 @@ import org.scalatest.mockito.MockitoSugar
 
 import scala.collection.breakOut
 import scala.collection.JavaConverters._
-import scala.concurrent.Await
+import scala.concurrent.{ Await, ExecutionContext }
 import scala.concurrent.duration.Duration
 
 /**
@@ -102,18 +103,20 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       //assert(result.code == StatusCodes.NotFound)
     }
 
-    "return StatusCodes.Ok if the lookup service returns StatusCodes.Ok" in {
+    "return Some() if the finder returns not None" in {
 
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
+        override def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinderAlwaysFound])
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      val data = ProcessingData(mock[ConsumerRecord[String, String]], "")
-      fakeFilter.makeVerificationLookup(data)
-      //assert(result.code == StatusCodes.Ok)
+      val data = ProcessingData(mock[ConsumerRecord[String, String]], "coucou")
+      import scala.concurrent.duration._
+      val res = Await.result(fakeFilter.makeVerificationLookup(data), 5.second)
+      res.isDefined mustBe true
     }
 
   }

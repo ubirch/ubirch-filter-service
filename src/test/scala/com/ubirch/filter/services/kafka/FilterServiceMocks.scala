@@ -2,7 +2,7 @@ package com.ubirch.filter.services.kafka
 
 import com.typesafe.config.Config
 import com.ubirch.filter.model.cache.Cache
-import com.ubirch.filter.model.eventlog.CassandraFinder
+import com.ubirch.filter.model.eventlog.{ CassandraFinder, Finder }
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.consumer.ConsumerRunner
 import com.ubirch.kafka.producer.ProducerRunner
@@ -18,7 +18,7 @@ import scala.concurrent.{ ExecutionContext, Future }
   * @param cache The cache is only used to record the messages being processed in this test.
   */
 @Singleton
-class ExceptionFilterServ @Inject() (cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends AbstractFilterService(cache, cassandraFinder, config, lifecycle) {
+class ExceptionFilterServ @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
   override def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = {
     Future {
       throw new Exception("test exception")
@@ -32,7 +32,7 @@ class ExceptionFilterServ @Inject() (cache: Cache, cassandraFinder: CassandraFin
   * @param cache The cache used to check if a message has already been received before.
   */
 @Singleton
-class FakeFilterService @Inject() (cache: Cache, cassandraFinder: CassandraFinder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, cassandraFinder, config, lifecycle) with MockitoSugar {
+class FakeFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, finder, config, lifecycle) with MockitoSugar {
   override lazy val consumption: ConsumerRunner[String, String] = mock[ConsumerRunner[String, String]]
   override lazy val production: ProducerRunner[String, String] = mock[ProducerRunner[String, String]]
 
@@ -47,4 +47,5 @@ class FakeFilterService @Inject() (cache: Cache, cassandraFinder: CassandraFinde
     counter = 1
     Future(mock[RecordMetadata])
   }
+
 }

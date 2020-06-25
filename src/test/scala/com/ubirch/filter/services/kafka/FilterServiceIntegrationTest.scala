@@ -146,7 +146,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       withRunningKafka {
-        Thread.sleep(1000)
+        Thread.sleep(5000)
         val msgEnvelope = generateMessageEnvelope()
         //publish message first time
         val Injector = FakeSimpleInjector(bootstrapServers)

@@ -79,7 +79,6 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
   })) {}
 
   override protected def beforeEach(): Unit = {
-    //cleanAllKafka()
     CollectorRegistry.defaultRegistry.clear()
     EmbeddedKafka.stop()
     EmbeddedKafka.stopZooKeeper()
@@ -119,7 +118,12 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
       withRunningKafka {
 
-        Try(redis.stop())
+        logger.info("trying stop redis")
+        try {
+          redis.stop()
+        } catch {
+          case _: Throwable =>
+        }
 
         val msgEnvelope = generateMessageEnvelope()
 

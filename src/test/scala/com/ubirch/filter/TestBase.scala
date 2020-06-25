@@ -22,22 +22,9 @@ trait TestBase
 
   def await[T](future: Future[T], atMost: Duration): T = Await.result(future, atMost)
 
-  def getPidOfServiceUsingGivenPort(port: Int): Int = TestBase.getPidOfServiceUsingGivenPort(port)
-
   def readConsumerTopicHead(conf: Config): String = conf.getString(ConsumerConfPaths.TOPICS).split(", ").toSet.head
   def readProducerForwardTopic(conf: Config): String = conf.getString(ProducerConfPaths.FORWARD_TOPIC)
   def readProducerErrorTopic(conf: Config): String = conf.getString(ProducerConfPaths.ERROR_TOPIC)
   def readProducerRejectionTopic(conf: Config): String = conf.getString(ProducerConfPaths.REJECTION_TOPIC)
 
-}
-
-object TestBase {
-  def getPidOfServiceUsingGivenPort(port: Int): Int = {
-    proc("lsof", "-t", "-i", s":$port", "-s", "TCP:LISTEN").call().chunks.iterator
-      .collect {
-        case Left(s) => s
-        case Right(s) => s
-      }
-      .map(x => new String(x.array)).map(_.trim.toInt).toList.head
-  }
 }
