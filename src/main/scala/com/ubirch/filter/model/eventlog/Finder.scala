@@ -27,3 +27,14 @@ class CassandraFinder @Inject() (events: EventsDAO)(implicit val ec: ExecutionCo
   def findUPP(value: String): Future[Option[String]] = events.byIdAndCat(value, Values.UPP_CATEGORY).map(_.headOption)
 
 }
+
+/**
+  * Whatever the UPP being queried, the result will always be negative
+  */
+// TODO: RESTORE: remove this
+@Singleton
+class CassandraFinderNeverFound @Inject() (implicit val ec: ExecutionContext) extends Finder {
+
+  override def findUPP(value: String): Future[Option[String]] = Future.successful(None)
+
+}

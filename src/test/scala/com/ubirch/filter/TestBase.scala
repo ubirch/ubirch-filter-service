@@ -5,7 +5,6 @@ import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers, WordSpec }
 import org.scalatest.concurrent.ScalaFutures
-import os.proc
 
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration.Duration
