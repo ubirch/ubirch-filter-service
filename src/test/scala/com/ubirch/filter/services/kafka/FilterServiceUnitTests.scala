@@ -42,6 +42,7 @@ import scala.concurrent.duration.Duration
 /**
   * This class provides unit tests for most methods of the filter service.
   */
+@Ignore
 class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatchers with LazyLogging with EmbeddedCassandra with BeforeAndAfterAll {
 
   override protected def beforeAll(): Unit = {
