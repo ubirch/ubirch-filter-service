@@ -28,3 +28,11 @@ class CassandraFinder @Inject() (events: EventsDAO)(implicit val ec: ExecutionCo
 
 }
 
+/**
+* Whatever the UPP being queried, the result will always be negative
+*/
+class CassandraFinderNeverFound @Inject() (implicit val ec: ExecutionContext) extends Finder {
+
+  override def findUPP(value: String): Future[Option[String]] = Future.successful(None)
+
+}
