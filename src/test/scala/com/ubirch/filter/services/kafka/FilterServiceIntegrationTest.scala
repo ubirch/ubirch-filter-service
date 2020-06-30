@@ -49,8 +49,6 @@ import scala.language.postfixOps
   * This class provides all integration tests, except for those testing a missing redis connection on startup.
   * The Kafka config has to be inside each single test to enable parallel testing with different ports.
   */
-// TODO: RESTORE: remove this tag
-@Ignore
 class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
@@ -65,10 +63,10 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
     */
   def customTestConfigProvider(bootstrapServers: String): ConfigProvider = new ConfigProvider {
     override def conf: Config = super.conf.withValue(
-      ConsumerConfPaths.BOOTSTRAP_SERVERS,
+      ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-        ProducerConfPaths.BOOTSTRAP_SERVERS,
+        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
         ConfigValueFactory.fromAnyRef(bootstrapServers)
       )
   }
@@ -280,10 +278,10 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
       def FakeInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(new ConfigProvider {
           override def conf: Config = super.conf.withValue(
-            ConsumerConfPaths.BOOTSTRAP_SERVERS,
+            ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-              ProducerConfPaths.BOOTSTRAP_SERVERS,
+              ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
               ConfigValueFactory.fromAnyRef(bootstrapServers)
             ).withValue(
                 FilterConfPaths.FILTER_STATE,
@@ -320,10 +318,10 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
       def FakeInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(new ConfigProvider {
           override def conf: Config = super.conf.withValue(
-            ConsumerConfPaths.BOOTSTRAP_SERVERS,
+            ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-              ProducerConfPaths.BOOTSTRAP_SERVERS,
+              ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
               ConfigValueFactory.fromAnyRef(bootstrapServers)
             ).withValue(
                 FilterConfPaths.ENVIRONMENT,
@@ -361,7 +359,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
       val cr = new ConsumerRecord[String, String]("topic", 1, 1, "key", "Teststring")
       val payload = UUID.randomUUID().toString
       val data = ProcessingData(cr, payload)
-      val Injector = FakeSimpleInjector(ConsumerConfPaths.BOOTSTRAP_SERVERS)
+      val Injector = FakeSimpleInjector(ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS)
       val filterConsumer = Injector.get[DefaultFilterService]
       val result = Await.result(filterConsumer.makeVerificationLookup(data), 5.second)
       implicit val ec: ExecutionContext = Injector.get[ExecutionContext]

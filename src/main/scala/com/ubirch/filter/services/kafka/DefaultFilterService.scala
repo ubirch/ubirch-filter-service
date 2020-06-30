@@ -125,33 +125,35 @@ trait FilterService {
   def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, String], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
 }
 
-abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, String, Unit] with LazyLogging {
+abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, String, Unit] with LazyLogging
+  with ConsumerConfPaths with ProducerConfPaths with FilterConfPaths {
 
   override val prefix: String = "Ubirch"
 
   override val maxTimeAggregationSeconds: Long = 180
-  override val lingerMs: Int = config.getInt(ProducerConfPaths.LINGER_MS)
-  override val consumerReconnectBackoffMsConfig: Long = config.getLong(ConsumerConfPaths.RECONNECT_BACKOFF_MS_CONFIG)
-  override val consumerReconnectBackoffMaxMsConfig: Long = config.getLong(ConsumerConfPaths.RECONNECT_BACKOFF_MAX_MS_CONFIG)
-  override val consumerTopics: Set[String] = config.getString(ConsumerConfPaths.TOPICS).split(", ").toSet
-  override val consumerGroupId: String = config.getString(ConsumerConfPaths.GROUP_ID)
-  override val consumerMaxPollRecords: Int = config.getInt(ConsumerConfPaths.MAX_POOL_RECORDS)
-  override val consumerGracefulTimeout: Int = config.getInt(ConsumerConfPaths.GRACEFUL_TIMEOUT)
-  override def consumerBootstrapServers: String = config.getString(ConsumerConfPaths.BOOTSTRAP_SERVERS)
+  override val consumerReconnectBackoffMsConfig: Long = config.getLong(RECONNECT_BACKOFF_MS_CONFIG)
+  override val consumerReconnectBackoffMaxMsConfig: Long = config.getLong(RECONNECT_BACKOFF_MAX_MS_CONFIG)
+  override val consumerTopics: Set[String] = config.getString(CONSUMER_TOPICS).split(", ").toSet
+  override val consumerGroupId: String = config.getString(GROUP_ID)
+  override val consumerMaxPollRecords: Int = config.getInt(MAX_POOL_RECORDS)
+  override val consumerGracefulTimeout: Int = config.getInt(GRACEFUL_TIMEOUT)
+  override def consumerBootstrapServers: String = config.getString(CONSUMER_BOOTSTRAP_SERVERS)
 
-  override val producerBootstrapServers: String = config.getString(ProducerConfPaths.BOOTSTRAP_SERVERS)
-  val producerErrorTopic: String = config.getString(ProducerConfPaths.ERROR_TOPIC)
-  val producerForwardTopic: String = config.getString(ProducerConfPaths.FORWARD_TOPIC)
-  val producerRejectionTopic: String = config.getString(ProducerConfPaths.REJECTION_TOPIC)
+  override val producerBootstrapServers: String = config.getString(PRODUCER_BOOTSTRAP_SERVERS)
+  val producerErrorTopic: String = config.getString(ERROR_TOPIC)
+  val producerForwardTopic: String = config.getString(FORWARD_TOPIC)
+  val producerRejectionTopic: String = config.getString(REJECTION_TOPIC)
 
-  override val metricsSubNamespace: String = config.getString(ConsumerConfPaths.METRICS_SUB_NAMESPACE)
+  override val lingerMs: Int = config.getInt(LINGER_MS)
+
+  override val metricsSubNamespace: String = config.getString(METRICS_SUB_NAMESPACE)
   override val keySerializer: serialization.Serializer[String] = new StringSerializer
   override val valueSerializer: serialization.Serializer[String] = new StringSerializer
   override val keyDeserializer: Deserializer[String] = new StringDeserializer
   override val valueDeserializer: Deserializer[String] = new StringDeserializer
 
-  private val ubirchEnvironment = config.getString(FilterConfPaths.ENVIRONMENT)
-  val filterStateActive: Boolean = config.getBoolean(FilterConfPaths.FILTER_STATE)
+  private val ubirchEnvironment = config.getString(ENVIRONMENT)
+  val filterStateActive: Boolean = config.getBoolean(FILTER_STATE)
 
   implicit val formats: Formats = com.ubirch.kafka.formats
 

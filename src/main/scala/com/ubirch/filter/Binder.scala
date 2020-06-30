@@ -4,7 +4,7 @@ import com.google.inject.{ AbstractModule, Module }
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.Config
 import com.ubirch.filter.model.cache.{ Cache, RedisCache }
-import com.ubirch.filter.model.eventlog.{ CassandraFinder, CassandraFinderNeverFound, Finder }
+import com.ubirch.filter.model.eventlog.{ CassandraFinder, Finder }
 import com.ubirch.filter.services.{ DefaultJVMHook, DefaultLifecycle, JVMHook, Lifecycle }
 import com.ubirch.filter.services.cluster.{ ClusterService, ConnectionService, DefaultClusterService, DefaultConnectionService }
 import com.ubirch.filter.services.config.ConfigProvider
@@ -22,11 +22,10 @@ class Binder extends AbstractModule {
   def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[RedisCache])
   def Lifecycle: ScopedBindingBuilder = bind(classOf[Lifecycle]).to(classOf[DefaultLifecycle])
   def JVMHook: ScopedBindingBuilder = bind(classOf[JVMHook]).to(classOf[DefaultJVMHook])
-  // TODO: RESTORE: uncomment this
-  //  def ClusterService: ScopedBindingBuilder = bind(classOf[ClusterService]).to(classOf[DefaultClusterService])
-  //  def ConnectionService: ScopedBindingBuilder = bind(classOf[ConnectionService]).to(classOf[DefaultConnectionService])
+  def ClusterService: ScopedBindingBuilder = bind(classOf[ClusterService]).to(classOf[DefaultClusterService])
+  def ConnectionService: ScopedBindingBuilder = bind(classOf[ConnectionService]).to(classOf[DefaultConnectionService])
   def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[DefaultFilterService])
-  def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinderNeverFound])
+  def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinder])
 
   def configure(): Unit = {
     Config
@@ -35,9 +34,9 @@ class Binder extends AbstractModule {
     Cache
     Lifecycle
     JVMHook
-    // TODO: RESTORE: uncomment this
-    //    ClusterService
-    //    ConnectionService
+
+    ClusterService
+    ConnectionService
     FilterService
     Finder
   }

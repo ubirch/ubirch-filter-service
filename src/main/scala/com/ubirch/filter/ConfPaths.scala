@@ -17,8 +17,8 @@ object ConfPaths {
     final val RECONNECT_BACKOFF_MS_CONFIG = "filterService.kafkaApi.kafkaConsumer.reconnectBackoffMsConfig"
     final val RECONNECT_BACKOFF_MAX_MS_CONFIG = "filterService.kafkaApi.kafkaConsumer.reconnectBackoffMaxMsConfig"
     final val METRICS_SUB_NAMESPACE = "filterService.metrics.prometheus.namespace"
-    final val TOPICS = "filterService.kafkaApi.kafkaConsumer.topic"
-    final val BOOTSTRAP_SERVERS = "filterService.kafkaApi.kafkaConsumer.bootstrapServers"
+    final val CONSUMER_TOPICS = "filterService.kafkaApi.kafkaConsumer.topic"
+    final val CONSUMER_BOOTSTRAP_SERVERS = "filterService.kafkaApi.kafkaConsumer.bootstrapServers"
     final val GROUP_ID = "filterService.kafkaApi.kafkaConsumer.groupId"
     final val MAX_POOL_RECORDS = "filterService.kafkaApi.kafkaConsumer.maxPoolRecords"
     final val GRACEFUL_TIMEOUT = "filterService.kafkaApi.kafkaConsumer.gracefulTimeout"
@@ -26,7 +26,7 @@ object ConfPaths {
 
   trait ProducerConfPaths {
     final val LINGER_MS = "filterService.kafkaApi.kafkaProducer.lingerMS"
-    final val BOOTSTRAP_SERVERS = "filterService.kafkaApi.kafkaProducer.bootstrapServers"
+    final val PRODUCER_BOOTSTRAP_SERVERS = "filterService.kafkaApi.kafkaProducer.bootstrapServers"
     final val ERROR_TOPIC = "filterService.kafkaApi.kafkaProducer.errorTopic"
     final val FORWARD_TOPIC = "filterService.kafkaApi.kafkaProducer.forwardTopic"
     final val REJECTION_TOPIC = "filterService.kafkaApi.kafkaProducer.rejectionTopic"

@@ -39,10 +39,7 @@ import redis.embedded.RedisServer
 
 import scala.language.postfixOps
 import scala.sys.process._
-import scala.util.Try
 
-// TODO: RESTORE: remove this tag
-@Ignore
 class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
@@ -65,10 +62,10 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
     */
   def customTestConfigProvider(bootstrapServers: String): ConfigProvider = new ConfigProvider {
     override def conf: Config = super.conf.withValue(
-      ConsumerConfPaths.BOOTSTRAP_SERVERS,
+      ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-        ProducerConfPaths.BOOTSTRAP_SERVERS,
+        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
         ConfigValueFactory.fromAnyRef(bootstrapServers)
       )
   }

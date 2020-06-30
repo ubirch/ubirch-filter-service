@@ -21,7 +21,7 @@ trait TestBase
 
   def await[T](future: Future[T], atMost: Duration): T = Await.result(future, atMost)
 
-  def readConsumerTopicHead(conf: Config): String = conf.getString(ConsumerConfPaths.TOPICS).split(", ").toSet.head
+  def readConsumerTopicHead(conf: Config): String = conf.getString(ConsumerConfPaths.CONSUMER_TOPICS).split(", ").toSet.head
   def readProducerForwardTopic(conf: Config): String = conf.getString(ProducerConfPaths.FORWARD_TOPIC)
   def readProducerErrorTopic(conf: Config): String = conf.getString(ProducerConfPaths.ERROR_TOPIC)
   def readProducerRejectionTopic(conf: Config): String = conf.getString(ProducerConfPaths.REJECTION_TOPIC)
