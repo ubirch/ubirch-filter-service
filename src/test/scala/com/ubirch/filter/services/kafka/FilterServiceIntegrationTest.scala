@@ -49,7 +49,6 @@ import scala.language.postfixOps
   * This class provides all integration tests, except for those testing a missing redis connection on startup.
   * The Kafka config has to be inside each single test to enable parallel testing with different ports.
   */
-@Ignore
 class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
