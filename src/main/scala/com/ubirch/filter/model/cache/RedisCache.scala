@@ -17,6 +17,7 @@
 package com.ubirch.filter.model.cache
 
 import java.net.UnknownHostException
+import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.{ Config, ConfigFactory }
 import com.typesafe.scalalogging.LazyLogging
@@ -24,7 +25,7 @@ import com.ubirch.filter.services.Lifecycle
 import javax.inject.{ Inject, Singleton }
 import monix.execution.Scheduler
 import org.redisson.Redisson
-import org.redisson.api.{ RedissonClient, RMap }
+import org.redisson.api.{ RedissonClient, RMap, RMapCache }
 
 import scala.concurrent.duration._
 import scala.concurrent.Future
@@ -43,6 +44,7 @@ class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler)
   private val evaluatedPW = if (password == "") null else password
   private val useReplicated: Boolean = conf.getBoolean("filterService.redis.useReplicated")
   private val cacheName: String = conf.getString("filterService.redis.cacheName")
+  private val cacheTTL: Long = conf.getLong("filterService.redis.ttl")
   val redisConf = new org.redisson.config.Config()
   private val prefix = "redis://"
 
@@ -59,7 +61,7 @@ class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler)
   }
 
   private var redisson: RedissonClient = _
-  private var cache: RMap[String, Boolean] = _
+  private var cache: RMapCache[String, Boolean] = _
 
   private val initialDelay = 1.seconds
   private val repeatingDelay = 2.seconds
@@ -70,7 +72,8 @@ class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler)
   private val c = scheduler.scheduleAtFixedRate(initialDelay, repeatingDelay) {
     try {
       redisson = Redisson.create(redisConf)
-      cache = redisson.getMap[String, Boolean](cacheName)
+      //cache = redisson.getMap[String, Boolean](cacheName)
+      cache = redisson.getMapCache[String, Boolean](cacheName)
       stopConnecting()
       logger.info("connection to redis cache has been established.")
     } catch {
@@ -112,7 +115,7 @@ class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler)
   @throws[NoCacheConnectionException]
   def set(hash: String): Boolean = {
     if (cache == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
-    cache.put(hash, true)
+    cache.put(hash, true, cacheTTL, TimeUnit.MINUTES)
   }
 
   lifecycle.addStopHook { () =>

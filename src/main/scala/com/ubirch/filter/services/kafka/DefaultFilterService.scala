@@ -231,8 +231,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
     } catch {
       //Todo: Should I catch further Exceptions?
       case ex: TimeoutException =>
-        publishErrorMessage(s"http timeout while verification lookup for ${data.cr.key()}.", data.cr, ex)
-        throw NeedForPauseException(s"http timeout while verification lookup for ${data.cr.key()}: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
+        publishErrorMessage(s"cassandra timeout while verification lookup for ${data.cr.key()}.", data.cr, ex)
+        throw NeedForPauseException(s"cassandra timeout while verification lookup for ${data.cr.key()}: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
     }
   }
 
