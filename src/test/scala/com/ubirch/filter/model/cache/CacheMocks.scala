@@ -26,23 +26,23 @@ import javax.inject.Singleton
 
 class CacheMockAlwaysException extends Cache {
 
-  def get(payload: String): Boolean = throw new TimeoutException()
+  def get(hash: Array[Byte]): Option[String] = throw new TimeoutException()
 
-  def set(payload: String): Boolean = throw new TimeoutException()
+  def set(hash: Array[Byte], upp: String): Unit = throw new TimeoutException()
 }
 
 class CacheMockAlwaysFalse extends Cache {
 
-  def get(payload: String): Boolean = false
+  def get(hash: Array[Byte]): Option[String] = None
 
-  def set(payload: String): Boolean = false
+  def set(hash: Array[Byte], upp: String): Unit = false
 }
 
 class CacheMockAlwaysTrue extends Cache {
 
-  def get(payload: String): Boolean = true
+  def get(hash: Array[Byte]): Option[String] = Some("value")
 
-  def set(payload: String): Boolean = true
+  def set(hash: Array[Byte], upp: String): Unit = true
 }
 
 /**
@@ -50,14 +50,14 @@ class CacheMockAlwaysTrue extends Cache {
   */
 @Singleton
 class CustomCache extends Cache {
-  var list: List[String] = List[String]()
+  var list: List[Array[Byte]] = List[Array[Byte]]()
 
-  def get(hash: String): Boolean = {
+  def get(hash: Array[Byte]): Option[String] = {
     list = list :+ hash
-    false
+    None
   }
 
-  def set(hash: String): Boolean = {
+  def set(hash: Array[Byte], upp: String): Unit = {
     false
   }
 }

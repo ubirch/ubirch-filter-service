@@ -88,7 +88,6 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
   }
 
   /**
-    * Method killing any embedded redis application, in case an earlier test was aborted without executing after.
     * Starting a new embedded redis server for testing purposes.
     */
   before {
@@ -260,13 +259,13 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         /**
           * the first two messages should be msgEnvelope1
           */
-        assert(cache.list.head == cache.list(1))
+        assert(cache.list.head sameElements cache.list(1))
 
         /**
           * the last two messages should be msgEnvelope1 and msgEnvelope2 as the consumer repeats consuming the
           * not yet committed messages.
           */
-        assert(cache.list.last != cache.list(cache.list.size - 2))
+        assert(!(cache.list.last sameElements cache.list(cache.list.size - 2)))
       }
     }
 
@@ -358,7 +357,8 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
     "return NotFound if hash hasn't been processed yet." in {
       val cr = new ConsumerRecord[String, String]("topic", 1, 1, "key", "Teststring")
       val payload = UUID.randomUUID().toString
-      val data = ProcessingData(cr, payload)
+      val protocolMessage = new ProtocolMessage(2, UUID.randomUUID(), 0, payload)
+      val data = ProcessingData(cr, protocolMessage)
       val Injector = FakeSimpleInjector(ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS)
       val filterConsumer = Injector.get[DefaultFilterService]
       val result = Await.result(filterConsumer.makeVerificationLookup(data), 5.second)

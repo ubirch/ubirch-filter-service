@@ -17,26 +17,27 @@
 package com.ubirch.filter.services.kafka
 
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util.UUID
 
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper }
-import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue }
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
+import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
 import com.ubirch.filter.ConfPaths.ProducerConfPaths
-import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, Values }
+import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Values}
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.json4s.JObject
-import org.scalatest.{ BeforeAndAfterAll, Ignore, MustMatchers, WordSpec }
+import org.scalatest.{BeforeAndAfterAll, Ignore, MustMatchers, WordSpec}
 import org.scalatest.mockito.MockitoSugar
 
 import scala.collection.breakOut
 import scala.collection.JavaConverters._
-import scala.concurrent.{ Await, ExecutionContext }
+import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration.Duration
 
 /**
@@ -54,7 +55,9 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
   }
 
   val cr = new ConsumerRecord[String, String]("topic", 1, 1, "1234", "false")
-  val data = ProcessingData(cr, "")
+  val payload = UUID.randomUUID().toString
+  val protocolMessage = new ProtocolMessage(2, UUID.randomUUID(), 0, payload)
+  val fakeData = ProcessingData(cr, protocolMessage)
 
   def FakeFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {
     override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
@@ -95,7 +98,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      val data = ProcessingData(mock[ConsumerRecord[String, String]], "")
+      val data = ProcessingData(mock[ConsumerRecord[String, String]], protocolMessage)
       import scala.concurrent.duration._
       val result = Await.result(fakeFilter.makeVerificationLookup(data), 5.seconds)
       result mustBe None
@@ -113,7 +116,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      val data = ProcessingData(mock[ConsumerRecord[String, String]], "coucou")
+      val data = ProcessingData(mock[ConsumerRecord[String, String]], protocolMessage)
       import scala.concurrent.duration._
       val res = Await.result(fakeFilter.makeVerificationLookup(data), 5.second)
       res.isDefined mustBe true
@@ -131,7 +134,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.cacheContainsHash(data) mustBe false
+      fakeFilter.cacheContainsHash(fakeData) mustBe None
     }
 
     "not disturb the forwarding of the UPP in forwardUPP()" in {
@@ -142,7 +145,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.forwardUPP(data)
+      fakeFilter.forwardUPP(fakeData)
       assert(fakeFilter.counter == 1)
     }
   }
@@ -157,7 +160,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.cacheContainsHash(data) mustBe true
+      fakeFilter.cacheContainsHash(fakeData) mustBe Some("value")
     }
 
     "return false, when hash hasn't been stored to the cache yet" in {
@@ -167,7 +170,7 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
       })) {}
       val Injector = specialInjector
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.cacheContainsHash(data) mustBe false
+      fakeFilter.cacheContainsHash(fakeData) mustBe None
     }
 
   }
@@ -177,14 +180,14 @@ class FilterServiceUnitTests extends WordSpec with MockitoSugar with MustMatcher
     "send the kafka message if the cache works correctly" in {
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
-      fakeFilterService.forwardUPP(data)
+      fakeFilterService.forwardUPP(fakeData)
       assert(fakeFilterService.counter == 1)
     }
 
     "throw an NeedForPauseException if the send method throws an exception" in {
       val Injector = ExceptionFilterServiceInjector
       val exceptionFilterService = Injector.get[ExceptionFilterServ]
-      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.forwardUPP(data), Duration.Inf))
+      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.forwardUPP(fakeData), Duration.Inf))
     }
   }
 
