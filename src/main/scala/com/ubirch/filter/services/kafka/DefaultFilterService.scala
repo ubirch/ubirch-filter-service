@@ -125,7 +125,7 @@ trait FilterService {
   def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, String], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
 }
 
-abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, String, Unit] with LazyLogging
+abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, String, Unit] with LazyLogging
   with ConsumerConfPaths with ProducerConfPaths with FilterConfPaths {
 
   override val prefix: String = "Ubirch"
@@ -166,7 +166,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, val config: C
       logger.debug("consumer record received with key: " + cr.key())
 
       extractData(cr).map { msgEnvelope: MessageEnvelope =>
-
+        msgEnvelope.ubirchPacket.toString
         val data = ProcessingData(cr, msgEnvelope.ubirchPacket.getPayload.toString)
 
         if (!filterStateActive && ubirchEnvironment != Values.PRODUCTION_NAME) {

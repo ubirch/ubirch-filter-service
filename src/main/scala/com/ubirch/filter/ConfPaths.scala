@@ -37,8 +37,20 @@ object ConfPaths {
     final val ENVIRONMENT = "filterService.verification.environment"
   }
 
+  trait RedisConfPaths {
+    final val REDIS_PORT = "filterService.redis.port"
+    final val REDIS_PASSWORD = "filterService.redis.password"
+    final val REDIS_USE_REPLICATED = "filterService.redis.useReplicated"
+    final val REDIS_CACHE_NAME = "filterService.redis.cacheName"
+    final val REDIS_CACHE_TTL = "filterService.redis.ttl"
+    final val REDIS_MAIN_HOST = "filterService.redis.mainHost"
+    final val REDIS_REPLICATED_HOST = "filterService.redis.replicatedHost"
+    final val REDIS_HOST = "filterService.redis.host"
+  }
+
   object ConsumerConfPaths extends ConsumerConfPaths
   object ProducerConfPaths extends ProducerConfPaths
   object FilterConfPaths extends FilterConfPaths
+  object RedisConfPaths extends RedisConfPaths
 
 }

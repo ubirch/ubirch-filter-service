@@ -19,13 +19,14 @@ package com.ubirch.filter.model.cache
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
-import com.typesafe.config.{ Config, ConfigFactory }
+import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.services.Lifecycle
+import com.ubirch.filter.ConfPaths.RedisConfPaths
 import javax.inject.{ Inject, Singleton }
 import monix.execution.Scheduler
 import org.redisson.Redisson
-import org.redisson.api.{ RedissonClient, RMap, RMapCache }
+import org.redisson.api.{ RedissonClient, RMapCache }
 
 import scala.concurrent.duration._
 import scala.concurrent.Future
@@ -35,16 +36,15 @@ import scala.concurrent.Future
   * payload/hash as a key and a boolean as the value that is always true
   */
 @Singleton
-class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler) extends Cache with LazyLogging {
+class RedisCache @Inject() (lifecycle: Lifecycle, config: Config)(implicit scheduler: Scheduler)
+  extends Cache with LazyLogging with RedisConfPaths {
 
-  def conf: Config = ConfigFactory.load()
-
-  private val port: String = conf.getString("filterService.redis.port")
-  private val password: String = conf.getString("filterService.redis.password")
+  private val port: String = config.getString(REDIS_PORT)
+  private val password: String = config.getString(REDIS_PASSWORD)
   private val evaluatedPW = if (password == "") null else password
-  private val useReplicated: Boolean = conf.getBoolean("filterService.redis.useReplicated")
-  private val cacheName: String = conf.getString("filterService.redis.cacheName")
-  private val cacheTTL: Long = conf.getLong("filterService.redis.ttl")
+  private val useReplicated: Boolean = config.getBoolean(REDIS_USE_REPLICATED)
+  private val cacheName: String = config.getString(REDIS_CACHE_NAME)
+  private val cacheTTL: Long = config.getLong(REDIS_CACHE_TTL)
   val redisConf = new org.redisson.config.Config()
   private val prefix = "redis://"
 
@@ -52,11 +52,11 @@ class RedisCache @Inject() (lifecycle: Lifecycle)(implicit scheduler: Scheduler)
     * Uses replicated redis server, when used in dev/prod environment.
     */
   if (useReplicated) {
-    val mainNode = prefix ++ conf.getString("filterService.redis.mainHost") ++ ":" ++ port
-    val replicatedNode = prefix ++ conf.getString("filterService.redis.replicatedHost") ++ ":" ++ port
+    val mainNode = prefix ++ config.getString(REDIS_MAIN_HOST) ++ ":" ++ port
+    val replicatedNode = prefix ++ config.getString(REDIS_REPLICATED_HOST) ++ ":" ++ port
     redisConf.useReplicatedServers().addNodeAddress(mainNode, replicatedNode).setPassword(evaluatedPW)
   } else {
-    val singleNode: String = prefix ++ conf.getString("filterService.redis.host") ++ ":" ++ port
+    val singleNode: String = prefix ++ config.getString(REDIS_HOST) ++ ":" ++ port
     redisConf.useSingleServer().setAddress(singleNode).setPassword(evaluatedPW)
   }
 

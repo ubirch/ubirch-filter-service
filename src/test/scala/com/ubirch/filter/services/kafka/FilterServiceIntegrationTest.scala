@@ -28,7 +28,7 @@ import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, _ }
 import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue, CustomCache }
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths, RedisConfPaths }
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver

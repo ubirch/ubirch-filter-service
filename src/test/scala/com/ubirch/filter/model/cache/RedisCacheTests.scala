@@ -1,0 +1,49 @@
+package com.ubirch.filter.model.cache
+
+import com.github.sebruck.EmbeddedRedis
+import com.google.inject.binder.ScopedBindingBuilder
+import com.typesafe.config.{ Config, ConfigValueFactory }
+import com.ubirch.filter.ConfPaths.RedisConfPaths
+import com.ubirch.filter.{ Binder, InjectorHelper, TestBase }
+import com.ubirch.filter.services.config.ConfigProvider
+import org.scalatest.BeforeAndAfter
+import redis.embedded.RedisServer
+
+class RedisCacheTests extends TestBase with EmbeddedRedis with BeforeAndAfter {
+
+  var redis: RedisServer = _
+
+  before {
+    redis = new RedisServer(6379)
+    Thread.sleep(3000)
+    redis.start()
+  }
+
+  after {
+    redis.stop()
+  }
+
+  "Redis cache" must {
+    "Set expiration cache accordingly" in {
+      def customTestConfigProviderTtl(ttl: Int): ConfigProvider = new ConfigProvider {
+        override def conf: Config = super.conf.withValue(
+          RedisConfPaths.REDIS_CACHE_TTL,
+          ConfigValueFactory.fromAnyRef(ttl)
+        )
+      }
+      def testInjector(ttl: Int): InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProviderTtl(ttl))
+      })) {}
+      val Injector = testInjector(1)
+      Thread.sleep(5000)
+      val redisCache = Injector.get[Cache]
+      Thread.sleep(5000)
+      val hash = "coucou"
+      redisCache.set(hash)
+      redisCache.get(hash) mustBe true
+      Thread.sleep(60000)
+      redisCache.get(hash) mustBe false
+    }
+  }
+
+}
