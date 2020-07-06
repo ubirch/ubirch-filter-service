@@ -24,9 +24,9 @@ case class NoCacheConnectionException(
 trait Cache {
 
   @throws[NoCacheConnectionException]
-  def get(hash: String): Boolean
+  def get(hash: Array[Byte]): Option[String]
 
   @throws[NoCacheConnectionException]
-  def set(hash: String): Boolean
+  def set(hash: Array[Byte], upp: String): Unit
 }
 

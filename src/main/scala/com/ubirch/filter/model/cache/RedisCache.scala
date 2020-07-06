@@ -61,7 +61,7 @@ class RedisCache @Inject() (lifecycle: Lifecycle, config: Config)(implicit sched
   }
 
   private var redisson: RedissonClient = _
-  private var cache: RMapCache[String, Boolean] = _
+  private var cache: RMapCache[Array[Byte], String] = _
 
   private val initialDelay = 1.seconds
   private val repeatingDelay = 2.seconds
@@ -73,7 +73,7 @@ class RedisCache @Inject() (lifecycle: Lifecycle, config: Config)(implicit sched
     try {
       redisson = Redisson.create(redisConf)
       //cache = redisson.getMap[String, Boolean](cacheName)
-      cache = redisson.getMapCache[String, Boolean](cacheName)
+      cache = redisson.getMapCache[Array[Byte], String](cacheName)
       stopConnecting()
       logger.info("connection to redis cache has been established.")
     } catch {
@@ -98,11 +98,9 @@ class RedisCache @Inject() (lifecycle: Lifecycle, config: Config)(implicit sched
     * @return value to the key, null if key doesn't exist yet
     */
   @throws[NoCacheConnectionException]
-  def get(hash: String): Boolean = {
+  def get(hash: Array[Byte]): Option[String] = {
     if (cache == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
-    val result: Any = cache.get(hash)
-    //Todo: weird, that in case of absence null is returned
-    if (result == null) false else true
+    Option(cache.get(hash))
   }
 
   /**
@@ -113,9 +111,9 @@ class RedisCache @Inject() (lifecycle: Lifecycle, config: Config)(implicit sched
     *         key is set for the first time
     */
   @throws[NoCacheConnectionException]
-  def set(hash: String): Boolean = {
+  def set(hash: Array[Byte], upp: String): Unit = {
     if (cache == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
-    cache.put(hash, true, cacheTTL, TimeUnit.MINUTES)
+    cache.put(hash, upp, cacheTTL, TimeUnit.MINUTES)
   }
 
   lifecycle.addStopHook { () =>

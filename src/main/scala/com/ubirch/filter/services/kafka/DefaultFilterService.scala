@@ -16,38 +16,46 @@
 
 package com.ubirch.filter.services.kafka
 
+import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.TimeoutException
+import java.util.Base64
 
 import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.model.cache.{ Cache, NoCacheConnectionException }
-import com.ubirch.filter.model.{ FilterError, Rejection, Values }
+import com.ubirch.filter.model.cache.{Cache, NoCacheConnectionException}
+import com.ubirch.filter.model.{FilterError, Rejection, Values}
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka._
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
-import javax.inject.{ Inject, Singleton }
+import com.ubirch.protocol.ProtocolMessage
+import javax.inject.{Inject, Singleton}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
+import org.msgpack.core.MessagePack
 
 import scala.collection.immutable
 import scala.collection.JavaConverters._
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Success
 
-case class ProcessingData(cr: ConsumerRecord[String, String], payload: String)
+case class ProcessingData(cr: ConsumerRecord[String, String], upp: ProtocolMessage) {
+  def payloadHash: Array[Byte] = upp.getPayload.asText().getBytes(StandardCharsets.UTF_8)
+  def payloadString: String = upp.getPayload.asText()
+}
 
 trait FilterService {
 
@@ -81,7 +89,7 @@ trait FilterService {
     * @param data The data to become processed.
     * @return A boolean if the hash/payload has been already processed once or not.
     */
-  def cacheContainsHash(data: ProcessingData): Boolean
+  def cacheContainsHash(data: ProcessingData): Option[String]
 
   /**
     * Method that forwards the incoming consumer record via Kafka in case no replay
@@ -156,7 +164,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   val filterStateActive: Boolean = config.getBoolean(FILTER_STATE)
 
   implicit val formats: Formats = com.ubirch.kafka.formats
-
+  val msgPackConfig = new MessagePack.PackerConfig().withStr8FormatSupport(false)
   /**
     * Method that processes all consumer records of the incoming batch (Kafka message).
     */
@@ -167,22 +175,23 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
       extractData(cr).map { msgEnvelope: MessageEnvelope =>
         msgEnvelope.ubirchPacket.toString
-        val data = ProcessingData(cr, msgEnvelope.ubirchPacket.getPayload.toString)
+        val data = ProcessingData(cr, msgEnvelope.ubirchPacket)
 
         if (!filterStateActive && ubirchEnvironment != Values.PRODUCTION_NAME) {
           forwardUPP(data)
         } else {
-          if (cacheContainsHash(data)) {
-            reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
-          } else {
-            makeVerificationLookup(data).flatMap {
-              case Some(_) =>
-                logger.debug("Found a match in cassandra, launching reactOnReplayAttack")
-                reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
-              case None =>
-                logger.debug("Found no match in cassandra")
-                forwardUPP(data)
-            }
+          cacheContainsHash(data) match {
+            case Some(_) =>
+              reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
+            case None =>
+              makeVerificationLookup(data).flatMap {
+                case Some(_) =>
+                  logger.debug("Found a match in cassandra, launching reactOnReplayAttack")
+                  reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
+                case None =>
+                  logger.debug("Found no match in cassandra")
+                  forwardUPP(data)
+              }
           }
         }
       }.getOrElse(Future.successful(None))
@@ -210,23 +219,23 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
-  def cacheContainsHash(data: ProcessingData): Boolean = {
+  def cacheContainsHash(data: ProcessingData): Option[String] = {
     try {
-      cache.get(data.payload)
+      cache.get(data.payloadHash)
     } catch {
       case ex: NoCacheConnectionException =>
         publishErrorMessage(s"unable to make cache lookup '${data.cr.key()}'.", data.cr, ex)
-        false
+        None
       case ex: Exception =>
         publishErrorMessage(s"unable to make cache lookup '${data.cr.key()}'.", data.cr, ex)
-        false
+        None
     }
   }
 
   def makeVerificationLookup(data: ProcessingData): Future[Option[String]] = {
 
     try {
-      val trimmedValue = trimPayload(data.payload)
+      val trimmedValue = trimPayload(data.payloadString)
       finder.findUPP(trimmedValue)
     } catch {
       //Todo: Should I catch further Exceptions?
@@ -251,8 +260,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
-    try
-      cache.set(data.payload)
+    try {
+      val hash = data.upp.getPayload.asText().getBytes(StandardCharsets.UTF_8)
+      cache.set(hash, b64(rawPacket(data.upp)))
+    }
     catch {
       case ex: NoCacheConnectionException =>
         publishErrorMessage(s"unable to add ${data.cr.key()} to cache", data.cr, ex)
@@ -325,6 +336,22 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     logger.error("throwing NeedForPauseException to pause kafka message consumption")
     throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
   }
+
+  private def rawPacket(upp: ProtocolMessage): Array[Byte] = {
+    val out = new ByteArrayOutputStream(255)
+    val packer = msgPackConfig.newPacker(out)
+
+    if(upp.getSigned != null) {packer.writePayload(upp.getSigned)}
+    packer.packBinaryHeader(upp.getSignature.length)
+    packer.writePayload(upp.getSignature)
+    packer.flush()
+    packer.close()
+
+    out.toByteArray
+  }
+
+  private def b64(x: Array[Byte]): String = if (x != null) Base64.getEncoder.encodeToString(x) else null
+
 
   lifecycle.addStopHook { () =>
     logger.info("Shutting down kafka")
