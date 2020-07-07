@@ -16,6 +16,9 @@ EXPOSE 9020
 # for prometheus metrics
 EXPOSE 4321
 
+COPY certs/truststore-prod.jks /usr/share/service/lib/truststore-prod.jks
+COPY certs/truststore-devtest.jks /usr/share/service/lib/truststore-devtest.jks
+
 ENTRYPOINT [ \
   "/bin/bash", \
   "-c", \
@@ -33,7 +36,7 @@ ENTRYPOINT [ \
    -Dconfig.resource=application-docker.conf \
    -Dlogback.configurationFile=logback-docker.xml \
    -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=9020 \
-   -jar /usr/share/service/main.jar" \
+   $EVTL_JAVA_OPTS -jar /usr/share/service/main.jar" \
 ]
 
 # Add Maven dependencies (not shaded into the artifact; Docker-cached)

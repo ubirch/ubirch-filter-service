@@ -72,7 +72,6 @@ class RedisCache @Inject() (lifecycle: Lifecycle, config: Config)(implicit sched
   private val c = scheduler.scheduleAtFixedRate(initialDelay, repeatingDelay) {
     try {
       redisson = Redisson.create(redisConf)
-      //cache = redisson.getMap[String, Boolean](cacheName)
       cache = redisson.getMapCache[Array[Byte], String](cacheName)
       stopConnecting()
       logger.info("connection to redis cache has been established.")
