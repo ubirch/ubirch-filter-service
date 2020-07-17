@@ -22,22 +22,22 @@ import java.util.UUID
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
-import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper }
+import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue }
 import com.ubirch.filter.ConfPaths.ProducerConfPaths
-import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Values}
+import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, Values }
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.json4s.JObject
-import org.scalatest.{BeforeAndAfterAll, Ignore, MustMatchers, WordSpec}
+import org.scalatest.{ BeforeAndAfterAll, Ignore, MustMatchers, WordSpec }
 import org.scalatest.mockito.MockitoSugar
 
 import scala.collection.breakOut
 import scala.collection.JavaConverters._
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{ Await, ExecutionContext }
 import scala.concurrent.duration.Duration
 
 /**

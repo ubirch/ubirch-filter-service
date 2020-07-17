@@ -25,19 +25,19 @@ import java.util.Base64
 import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.model.cache.{Cache, NoCacheConnectionException}
-import com.ubirch.filter.model.{FilterError, Rejection, Values}
+import com.ubirch.filter.model.cache.{ Cache, NoCacheConnectionException }
+import com.ubirch.filter.model.{ FilterError, Rejection, Values }
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka._
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
@@ -47,7 +47,7 @@ import org.msgpack.core.MessagePack
 
 import scala.collection.immutable
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Success
@@ -263,8 +263,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     try {
       val hash = data.upp.getPayload.asText().getBytes(StandardCharsets.UTF_8)
       cache.set(hash, b64(rawPacket(data.upp)))
-    }
-    catch {
+    } catch {
       case ex: NoCacheConnectionException =>
         publishErrorMessage(s"unable to add ${data.cr.key()} to cache", data.cr, ex)
       case ex: Exception =>
@@ -341,7 +340,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     val out = new ByteArrayOutputStream(255)
     val packer = msgPackConfig.newPacker(out)
 
-    if(upp.getSigned != null) {packer.writePayload(upp.getSigned)}
+    if (upp.getSigned != null) { packer.writePayload(upp.getSigned) }
     packer.packBinaryHeader(upp.getSignature.length)
     packer.writePayload(upp.getSignature)
     packer.flush()
@@ -351,7 +350,6 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   private def b64(x: Array[Byte]): String = if (x != null) Base64.getEncoder.encodeToString(x) else null
-
 
   lifecycle.addStopHook { () =>
     logger.info("Shutting down kafka")
