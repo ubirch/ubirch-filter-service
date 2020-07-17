@@ -31,8 +31,7 @@ import org.json4s.{ DefaultFormats, Formats }
   * incoming message is not going to be forwarded, if it e.g. is part
   * of a replay attack.This type is used to represent the rejection.
   *
-  * @param key           represents the key of the incoming consumer record.
-  *                      If the key is not possible to read from the record, a new uuid is used instead.
+  * @param requestId     represents the request id of the incoming consumer record.
   * @param message       represents an informative rejection message.
   * @param rejectionName represents the name of the exception. E.g ParsingIntoEventLogException.
   * @param value         represent the event value.
@@ -43,7 +42,7 @@ import org.json4s.{ DefaultFormats, Formats }
   * @param serviceName   represents the name of the service. By default, we use, filter-service.
   */
 case class Rejection(
-    key: String,
+    requestId: String,
     message: String,
     rejectionName: String,
     value: String = "empty",
@@ -52,7 +51,7 @@ case class Rejection(
 ) {
 
   override def toString: String = {
-    "{ \"key\":\"" + key + "\"," +
+    "{ \"requestId\":\"" + requestId + "\"," +
       "\"message\":\"" + message + "\"," +
       "\"rejectionName\":\"" + rejectionName + "\"," +
       "\"value\":\"" + value + "\"," +
