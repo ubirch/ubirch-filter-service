@@ -171,7 +171,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   override val process: Process = { crs =>
 
     val futureResponse: immutable.Seq[Future[Option[RecordMetadata]]] = crs.map { cr =>
-      logger.debug("consumer record received with key: " + cr.key())
+      logger.debug("consumer record received with key: " + cr.requestIdHeader().orNull)
 
       extractData(cr).map { msgEnvelope: MessageEnvelope =>
         msgEnvelope.ubirchPacket.toString
@@ -206,15 +206,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       val result = parse(cr.value()).extract[MessageEnvelope]
       Some(result)
     } catch {
-      case ex: MappingException =>
-        publishErrorMessage(s"unable to parse message envelope with key: ${cr.key()}.", cr, ex)
-        None
-      case ex: JsonParseException =>
-        publishErrorMessage(s"unable to parse consumer record with key: ${cr.key()}.", cr, ex)
-        None
-      //Todo: should I remove generic Exception? I could only trigger JsonParseException
       case ex: Exception =>
-        publishErrorMessage(s"unable to parse consumer record with key: ${cr.key()}.", cr, ex)
+        publishErrorMessage(s"unable to parse consumer record with key: ${cr.requestIdHeader().orNull}.", cr, ex)
         None
     }
   }
@@ -223,11 +216,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     try {
       cache.get(data.payloadHash)
     } catch {
-      case ex: NoCacheConnectionException =>
-        publishErrorMessage(s"unable to make cache lookup '${data.cr.key()}'.", data.cr, ex)
-        None
       case ex: Exception =>
-        publishErrorMessage(s"unable to make cache lookup '${data.cr.key()}'.", data.cr, ex)
+        publishErrorMessage(s"unable to make cache lookup '${data.cr.requestIdHeader().orNull}'.", data.cr, ex)
         None
     }
   }
@@ -240,8 +230,9 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     } catch {
       //Todo: Should I catch further Exceptions?
       case ex: TimeoutException =>
-        publishErrorMessage(s"cassandra timeout while verification lookup for ${data.cr.key()}.", data.cr, ex)
-        throw NeedForPauseException(s"cassandra timeout while verification lookup for ${data.cr.key()}: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
+        val requestId = data.cr.requestIdHeader().orNull
+        publishErrorMessage(s"cassandra timeout while verification lookup for $requestId.", data.cr, ex)
+        throw NeedForPauseException(s"cassandra timeout while verification lookup for $requestId: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
     }
   }
 
@@ -264,18 +255,16 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       val hash = data.upp.getPayload.asText().getBytes(StandardCharsets.UTF_8)
       cache.set(hash, b64(rawPacket(data.upp)))
     } catch {
-      case ex: NoCacheConnectionException =>
-        publishErrorMessage(s"unable to add ${data.cr.key()} to cache", data.cr, ex)
       case ex: Exception =>
-        publishErrorMessage(s"unable to add ${data.cr.key()} to cache.", data.cr, ex)
+        publishErrorMessage(s"unable to add ${data.cr.requestIdHeader().orNull} to cache.", data.cr, ex)
     }
     val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
       .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
       .recoverWith { case ex =>
-        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.key()} to $producerForwardTopic", data.cr, ex, 2 seconds)
+        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, 2 seconds)
       }
     result.onComplete {
-      case Success(_) => logger.info("successfully forwarded consumer record with key: {}", data.cr.key())
+      case Success(_) => logger.info("successfully forwarded consumer record with key: {}", data.cr.requestIdHeader().orNull)
       case _ =>
     }
     result.map { x => Some(x) }
@@ -293,7 +282,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     cr.toProducerRecord(
       topic = producerRejectionTopic,
       headers = (cr.headers().toArray :+ new RecordHeader(Values.HTTP_STATUS_CODE_HEADER, Values.HTTP_STATUS_CODE_REJECTION_ERROR.getBytes(UTF_8))).toIterable.asJava,
-      value = Rejection(cr.key, rejectionMessage, Values.REPLAY_ATTACK_NAME).toString
+      value = Rejection(cr.requestIdHeader().orNull, rejectionMessage, Values.REPLAY_ATTACK_NAME).toString
     )
   }
 
@@ -324,7 +313,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     logger.error(errorMessage, ex.getMessage, ex)
     val producerRecordToSend = cr.toProducerRecord(
       topic = producerErrorTopic,
-      value = FilterError(cr.key(), errorMessage, ex.getClass.getSimpleName, cr.value().toString.replace("\"", "\\\"")).toString
+      value = FilterError(cr.requestIdHeader().orNull, errorMessage, ex.getClass.getSimpleName, cr.value().replace("\"", "\\\"")).toString
     )
     send(producerRecordToSend)
       .recover { case _ => logger.error(s"failure publishing to error topic: $errorMessage") }

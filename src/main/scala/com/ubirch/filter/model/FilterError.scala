@@ -29,8 +29,8 @@ import org.json4s.jackson.Serialization.read
   * After trying to process/store the events, there's the possibility of getting an error.
   * This type is used to represent the error generated.
   *
-  * @param key           represents the key of the incoming consumer record.
-  *                      If the key is not possible to read from the record, a new uuid is used instead.
+  * @param requestId     represents the request id of the incoming consumer record.
+  *
   * @param message       represents a friendly error message.
   * @param exceptionName represents the name of the exception. E.g ParsingIntoEventLogException.
   * @param value         represent the event value.
@@ -41,7 +41,7 @@ import org.json4s.jackson.Serialization.read
   * @param serviceName   represents the name of the service. By default, we use, error-service.
   */
 case class FilterError(
-    key: String,
+    requestId: String,
     message: String,
     exceptionName: String,
     value: String = "",
@@ -50,7 +50,7 @@ case class FilterError(
 ) {
 
   override def toString: String = {
-    "{\"key\":\"" + key + "\"," +
+    "{\"requestId\":\"" + requestId + "\"," +
       "\"message\":\"" + message + "\"," +
       "\"exceptionName\":\"" + exceptionName + "\"," +
       "\"value\":\"" + value + "\"," +
