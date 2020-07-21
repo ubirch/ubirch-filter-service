@@ -2,7 +2,7 @@ package com.ubirch.filter.services.kafka
 
 import com.typesafe.config.Config
 import com.ubirch.filter.model.cache.Cache
-import com.ubirch.filter.model.eventlog.{ CassandraFinder, Finder }
+import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.consumer.ConsumerRunner
 import com.ubirch.kafka.producer.ProducerRunner

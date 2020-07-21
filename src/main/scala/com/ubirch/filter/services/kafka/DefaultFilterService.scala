@@ -19,19 +19,18 @@ package com.ubirch.filter.services.kafka
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
-import java.util.concurrent.TimeoutException
 import java.util.Base64
+import java.util.concurrent.TimeoutException
 
-import com.fasterxml.jackson.core.JsonParseException
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.model.cache.{ Cache, NoCacheConnectionException }
-import com.ubirch.filter.model.{ FilterError, Rejection, Values }
-import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
+import com.ubirch.filter.model.cache.Cache
+import com.ubirch.filter.model.eventlog.Finder
+import com.ubirch.filter.model.{ FilterError, Rejection, Values }
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.MessageEnvelope
-import com.ubirch.kafka._
+import com.ubirch.kafka.RichAnyConsumerRecord
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
@@ -45,11 +44,12 @@ import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
 import org.msgpack.core.MessagePack
 
-import scala.collection.immutable
 import scala.collection.JavaConverters._
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.collection.immutable
 import scala.concurrent.duration._
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.language.postfixOps
+import scala.language.implicitConversions
 import scala.util.Success
 
 case class ProcessingData(cr: ConsumerRecord[String, String], upp: ProtocolMessage) {

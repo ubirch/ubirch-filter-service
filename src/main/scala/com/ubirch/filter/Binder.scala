@@ -1,15 +1,15 @@
 package com.ubirch.filter
 
-import com.google.inject.{ AbstractModule, Module }
 import com.google.inject.binder.ScopedBindingBuilder
+import com.google.inject.{ AbstractModule, Module }
 import com.typesafe.config.Config
 import com.ubirch.filter.model.cache.{ Cache, RedisCache }
 import com.ubirch.filter.model.eventlog.{ CassandraFinder, Finder }
-import com.ubirch.filter.services.{ DefaultJVMHook, DefaultLifecycle, JVMHook, Lifecycle }
 import com.ubirch.filter.services.cluster.{ ClusterService, ConnectionService, DefaultClusterService, DefaultConnectionService }
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.services.execution.{ ExecutionProvider, SchedulerProvider }
 import com.ubirch.filter.services.kafka.{ AbstractFilterService, DefaultFilterService }
+import com.ubirch.filter.services.{ DefaultJVMHook, DefaultLifecycle, JVMHook, Lifecycle }
 import monix.execution.Scheduler
 
 import scala.concurrent.ExecutionContext

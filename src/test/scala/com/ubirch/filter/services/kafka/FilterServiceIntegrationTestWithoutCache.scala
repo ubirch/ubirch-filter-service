@@ -16,17 +16,17 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.{ Base64, UUID }
 import java.util.concurrent.TimeoutException
+import java.util.{ Base64, UUID }
 
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
 import com.ubirch.filter.model.{ FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer }
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
@@ -34,7 +34,7 @@ import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
 import org.json4s.JsonAST.{ JObject, JString }
-import org.scalatest.{ BeforeAndAfter, Ignore }
+import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
 
 import scala.language.postfixOps

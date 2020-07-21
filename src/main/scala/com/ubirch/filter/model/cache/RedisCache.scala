@@ -21,15 +21,15 @@ import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.services.Lifecycle
 import com.ubirch.filter.ConfPaths.RedisConfPaths
+import com.ubirch.filter.services.Lifecycle
 import javax.inject.{ Inject, Singleton }
 import monix.execution.Scheduler
 import org.redisson.Redisson
-import org.redisson.api.{ RedissonClient, RMapCache }
+import org.redisson.api.{ RMapCache, RedissonClient }
 
-import scala.concurrent.duration._
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 /**
   * Cache implementation for redis with a Map that stores the

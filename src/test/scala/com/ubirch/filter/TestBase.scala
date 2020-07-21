@@ -3,11 +3,11 @@ package com.ubirch.filter
 import com.typesafe.config.Config
 import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
 import net.manub.embeddedkafka.EmbeddedKafka
-import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers, WordSpec }
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers, WordSpec }
 
-import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration.Duration
+import scala.concurrent.{ Await, Future }
 
 trait TestBase
   extends WordSpec

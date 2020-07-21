@@ -16,20 +16,20 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.{ Base64, UUID }
 import java.util.concurrent.TimeoutException
+import java.util.{ Base64, UUID }
 
 import com.github.nosan.embedded.cassandra.cql.CqlScript
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
-import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, _ }
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
 import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue, CustomCache }
-import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths, RedisConfPaths }
 import com.ubirch.filter.model.eventlog.Finder
+import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, _ }
+import com.ubirch.filter.services.config.ConfigProvider
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
@@ -41,8 +41,8 @@ import org.json4s.JsonAST._
 import org.scalatest._
 import redis.embedded.RedisServer
 
-import scala.concurrent.{ Await, ExecutionContext }
 import scala.concurrent.duration._
+import scala.concurrent.{ Await, ExecutionContext }
 import scala.language.postfixOps
 
 /**
@@ -131,7 +131,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
   private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
 
     val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
-    pm.setSignature(org.bouncycastle.util.Strings.toByteArray("1111"))
+    pm.setSignature("1111".getBytes())
     val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
     MessageEnvelope(pm, ctxt)
   }

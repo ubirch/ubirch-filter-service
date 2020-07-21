@@ -101,10 +101,11 @@
             <version>1.2.11-SNAPSHOT</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/com.ubirch/ubirch-kafka-envelope -->
         <dependency>
             <groupId>com.ubirch</groupId>
-            <artifactId>event-log-util</artifactId>
-            <version>1.2.5-SNAPSHOT</version>
+            <artifactId>ubirch-kafka-envelope</artifactId>
+            <version>1.0.4-SNAPSHOT</version>
         </dependency>
 
         <dependency>
@@ -144,13 +145,6 @@
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
             <version>1.3.2</version>
-        </dependency>
-
-        <!-- https://mvnrepository.com/artifact/com.ubirch/ubirch-kafka-envelope -->
-        <dependency>
-            <groupId>com.ubirch</groupId>
-            <artifactId>ubirch-kafka-envelope</artifactId>
-            <version>1.0.3-SNAPSHOT</version>
         </dependency>
 
         <dependency>

@@ -6,8 +6,8 @@ import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.ubirch.filter.ConfPaths.RedisConfPaths
-import com.ubirch.filter.{ Binder, InjectorHelper, TestBase }
 import com.ubirch.filter.services.config.ConfigProvider
+import com.ubirch.filter.{ Binder, InjectorHelper, TestBase }
 import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
 
