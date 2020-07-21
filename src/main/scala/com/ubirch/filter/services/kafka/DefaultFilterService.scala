@@ -264,7 +264,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, 2 seconds)
       }
     result.onComplete {
-      case Success(_) => logger.info("successfully forwarded consumer record with key: {}", data.cr.requestIdHeader().orNull)
+      case Success(_) => logger.info("successfully forwarded consumer record with requestId: {}", data.cr.requestIdHeader().orNull)
       case _ =>
     }
     result.map { x => Some(x) }
@@ -287,6 +287,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+    logger.warn(s"UPP/Hash already known for requestId: ${cr.requestIdHeader().orNull} message=$rejectionMessage")
     val producerRecordToSend: ProducerRecord[String, String] = generateReplayAttackProducerRecord(cr, rejectionMessage)
     send(producerRecordToSend)
       .recoverWith {
