@@ -35,14 +35,14 @@ class CacheMockAlwaysFalse extends Cache {
 
   def get(hash: Array[Byte]): Option[String] = None
 
-  def set(hash: Array[Byte], upp: String): Unit = false
+  def set(hash: Array[Byte], upp: String): Unit = ()
 }
 
 class CacheMockAlwaysTrue extends Cache {
 
   def get(hash: Array[Byte]): Option[String] = Some("value")
 
-  def set(hash: Array[Byte], upp: String): Unit = true
+  def set(hash: Array[Byte], upp: String): Unit = ()
 }
 
 /**
@@ -57,8 +57,7 @@ class CustomCache extends Cache {
     None
   }
 
-  def set(hash: Array[Byte], upp: String): Unit = {
-    false
-  }
+  def set(hash: Array[Byte], upp: String): Unit = ()
+
 }
 
