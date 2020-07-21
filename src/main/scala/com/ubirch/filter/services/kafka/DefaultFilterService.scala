@@ -264,7 +264,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, 2 seconds)
       }
     result.onComplete {
-      case Success(_) => logger.info("successfully forwarded consumer record with requestId: {}", data.cr.requestIdHeader().orNull)
+      case Success(_) => logger.info("Successfully forwarded consumer record with requestId: {}", data.cr.requestIdHeader().orNull)
       case _ =>
     }
     result.map { x => Some(x) }
