@@ -171,10 +171,11 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   override val process: Process = { crs =>
 
     val futureResponse: immutable.Seq[Future[Option[RecordMetadata]]] = crs.map { cr =>
+
       logger.debug("consumer record received with key: " + cr.requestIdHeader().orNull)
 
-      extractData(cr).map { msgEnvelope: MessageEnvelope =>
-        msgEnvelope.ubirchPacket.toString
+      extractData(cr).map { msgEnvelope =>
+
         val data = ProcessingData(cr, msgEnvelope.ubirchPacket)
 
         if (!filterStateActive && ubirchEnvironment != Values.PRODUCTION_NAME) {
@@ -252,8 +253,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
     try {
-      val hash = data.upp.getPayload.asText().getBytes(StandardCharsets.UTF_8)
-      cache.set(hash, b64(rawPacket(data.upp)))
+      cache.set(data.payloadHash, b64(rawPacket(data.upp)))
     } catch {
       case ex: Exception =>
         publishErrorMessage(s"unable to add ${data.cr.requestIdHeader().orNull} to cache.", data.cr, ex)
