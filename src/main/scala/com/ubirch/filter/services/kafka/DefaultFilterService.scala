@@ -27,10 +27,9 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{ FilterError, Rejection, Values }
+import com.ubirch.filter.model.{ Error, Values }
 import com.ubirch.filter.services.Lifecycle
-import com.ubirch.kafka.MessageEnvelope
-import com.ubirch.kafka.RichAnyConsumerRecord
+import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord }
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
@@ -41,6 +40,7 @@ import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
+import org.json4s.ext.JavaTypesSerializers
 import org.json4s.jackson.JsonMethods.parse
 import org.msgpack.core.MessagePack
 
@@ -48,8 +48,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future }
-import scala.language.postfixOps
-import scala.language.implicitConversions
+import scala.language.{ implicitConversions, postfixOps }
 import scala.util.Success
 
 case class ProcessingData(cr: ConsumerRecord[String, String], upp: ProtocolMessage) {
@@ -133,8 +132,17 @@ trait FilterService {
   def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, String], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
 }
 
-abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle) extends FilterService with ExpressKafka[String, String, Unit] with LazyLogging
-  with ConsumerConfPaths with ProducerConfPaths with FilterConfPaths {
+object FilterService {
+  implicit val formats: Formats = com.ubirch.kafka.formats ++ JavaTypesSerializers.all
+}
+
+abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)
+  extends FilterService
+  with ExpressKafka[String, String, Unit]
+  with LazyLogging
+  with ConsumerConfPaths
+  with ProducerConfPaths
+  with FilterConfPaths {
 
   override val prefix: String = "Ubirch"
 
@@ -163,7 +171,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   private val ubirchEnvironment = config.getString(ENVIRONMENT)
   val filterStateActive: Boolean = config.getBoolean(FILTER_STATE)
 
-  implicit val formats: Formats = com.ubirch.kafka.formats
+  implicit val formats: Formats = FilterService.formats
+
   val msgPackConfig = new MessagePack.PackerConfig().withStr8FormatSupport(false)
   /**
     * Method that processes all consumer records of the incoming batch (Kafka message).
@@ -282,7 +291,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     cr.toProducerRecord(
       topic = producerRejectionTopic,
       headers = (cr.headers().toArray :+ new RecordHeader(Values.HTTP_STATUS_CODE_HEADER, Values.HTTP_STATUS_CODE_REJECTION_ERROR.getBytes(UTF_8))).toIterable.asJava,
-      value = Rejection(cr.requestIdHeader().orNull, rejectionMessage, Values.REPLAY_ATTACK_NAME).toString
+      value = Error(error = Values.REPLAY_ATTACK_NAME, causes = Seq(rejectionMessage), requestId = cr.requestIdHeader().orNull).toJson
     )
   }
 
@@ -314,7 +323,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     logger.error(errorMessage, ex.getMessage, ex)
     val producerRecordToSend = cr.toProducerRecord(
       topic = producerErrorTopic,
-      value = FilterError(cr.requestIdHeader().orNull, errorMessage, ex.getClass.getSimpleName, cr.value().replace("\"", "\\\"")).toString
+      value = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
     )
     send(producerRecordToSend)
       .recover { case _ => logger.error(s"failure publishing to error topic: $errorMessage") }
@@ -362,6 +371,4 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   * @author ${user.name}
   */
 @Singleton
-class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
-
-}
+class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)

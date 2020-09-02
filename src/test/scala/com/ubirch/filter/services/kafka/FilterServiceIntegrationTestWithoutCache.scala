@@ -24,7 +24,7 @@ import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
-import com.ubirch.filter.model.{ FilterError, FilterErrorDeserializer, Rejection, RejectionDeserializer }
+import com.ubirch.filter.model.Error
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.kafka.MessageEnvelope
@@ -33,6 +33,7 @@ import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
+import org.json4s.Formats
 import org.json4s.JsonAST.{ JObject, JString }
 import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
@@ -44,8 +45,8 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
-  implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
-  implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
+  implicit val formats: Formats = FilterService.formats
+  implicit val deRej: Deserializer[Error] = Error.ErrorDeserializer
 
   override protected def beforeAll(): Unit = {
     startCassandra()
@@ -136,8 +137,9 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
 
-        val cacheError1 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
-        cacheError1.exceptionName mustBe "NoCacheConnectionException"
+        val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
+        cacheError1.error mustBe "NoCacheConnectionException"
+        cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
 
       }
     }
@@ -159,16 +161,18 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         //publish message first time
         val (_, conf) = startKafka(bootstrapServers)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
-        val cacheError1 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
-        cacheError1.exceptionName mustBe "NoCacheConnectionException"
+        val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
+        cacheError1.error mustBe "NoCacheConnectionException"
+        cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
 
         //publish message second time (replay attack)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
-        val cacheError2 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
-        cacheError2.exceptionName mustBe "NoCacheConnectionException"
+        val cacheError2 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
+        cacheError1.error mustBe "NoCacheConnectionException"
+        cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
 
       }
     }
@@ -193,8 +197,9 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope1)
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope1.ubirchPacket.getUUID
-        val cacheError1 = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
-        cacheError1.exceptionName mustBe "NoCacheConnectionException"
+        val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
+        cacheError1.error mustBe "NoCacheConnectionException"
+        cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
         redis = new RedisServer(6379)
         redis.start()
         Thread.sleep(8000)
@@ -204,7 +209,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope2)
 
         assertThrows[TimeoutException] {
-          consumeNumberMessagesFrom[FilterError](readProducerErrorTopic(conf), 2)
+          consumeNumberMessagesFrom[Error](readProducerErrorTopic(conf), 2)
         }
         redis.stop()
       }
