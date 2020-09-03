@@ -27,7 +27,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
 import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue, CustomCache }
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, _ }
+import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, Error, Values }
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.kafka.MessageEnvelope
@@ -37,6 +37,7 @@ import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
+import org.json4s.Formats
 import org.json4s.JsonAST._
 import org.scalatest._
 import redis.embedded.RedisServer
@@ -53,8 +54,8 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
-  implicit val deRej: Deserializer[Rejection] = RejectionDeserializer
-  implicit val deError: Deserializer[FilterError] = FilterErrorDeserializer
+  implicit val formats: Formats = FilterService.formats
+  implicit val deRej: Deserializer[Error] = Error.ErrorDeserializer
 
   var redis: RedisServer = _
 
@@ -160,9 +161,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         //publish message second time (replay attack)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
-        val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Values.FOUND_IN_CACHE_MESSAGE
-        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
+        val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
+        rejection.causes mustBe List(Values.FOUND_IN_CACHE_MESSAGE)
+        rejection.error mustBe Values.REPLAY_ATTACK_NAME
       }
     }
 
@@ -187,9 +188,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         val msgEnvelope = generateMessageEnvelope()
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
-        val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Values.FOUND_IN_VERIFICATION_MESSAGE
-        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
+        val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
+        rejection.causes mustBe List(Values.FOUND_IN_VERIFICATION_MESSAGE)
+        rejection.error mustBe Values.REPLAY_ATTACK_NAME
       }
 
     }
@@ -214,10 +215,10 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         consumer.consumption.startPolling()
         Thread.sleep(1000)
 
-        val message: FilterError = consumeFirstMessageFrom[FilterError](readProducerErrorTopic(conf))
-        message.serviceName mustBe "filter-service"
-        message.exceptionName mustBe "JsonParseException"
-        message.message mustBe "unable to parse consumer record with key: null."
+        val message: Error = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
+        message.microservice mustBe "filter-service"
+        message.error mustBe "JsonParseException"
+        message.causes mustBe List("unable to parse consumer record with key: null.")
         assertThrows[TimeoutException] {
           consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
         }
@@ -345,9 +346,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
         Thread.sleep(1000)
 
-        val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Values.FOUND_IN_CACHE_MESSAGE
-        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
+        val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
+        rejection.causes mustBe List(Values.FOUND_IN_CACHE_MESSAGE)
+        rejection.error mustBe Values.REPLAY_ATTACK_NAME
       }
     }
   }
@@ -415,9 +416,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         consumer.consumption.startPolling()
         Thread.sleep(1000)
 
-        val rejection = consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
-        rejection.message mustBe Values.FOUND_IN_VERIFICATION_MESSAGE
-        rejection.rejectionName mustBe Values.REPLAY_ATTACK_NAME
+        val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
+        rejection.causes mustBe List(Values.FOUND_IN_VERIFICATION_MESSAGE)
+        rejection.error mustBe Values.REPLAY_ATTACK_NAME
       }
 
     }
@@ -450,7 +451,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
         Thread.sleep(1000)
 
         try {
-          consumeFirstMessageFrom[Rejection](readProducerRejectionTopic(conf))
+          consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
           fail()
         } catch {
           case _: java.util.concurrent.TimeoutException =>
