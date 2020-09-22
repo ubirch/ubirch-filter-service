@@ -62,7 +62,7 @@
         <encoding>UTF-8</encoding>
 
         <!-- versions -->
-        <scala.version>2.12.6</scala.version>
+        <scala.version>2.12.8</scala.version>
         <scala.compat.version>2.12</scala.compat.version>
         <io.monix.version>2.3.2</io.monix.version>
         <guice.version>4.1.0</guice.version>
