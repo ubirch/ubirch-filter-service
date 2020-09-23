@@ -18,7 +18,6 @@ package com.ubirch.filter.services.kafka
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Base64
 import java.util.concurrent.TimeoutException
 
@@ -29,6 +28,7 @@ import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.model.{ Error, Values }
 import com.ubirch.filter.services.Lifecycle
+import com.ubirch.kafka._
 import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord }
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
@@ -36,7 +36,6 @@ import com.ubirch.protocol.ProtocolMessage
 import javax.inject.{ Inject, Singleton }
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
-import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
@@ -44,7 +43,6 @@ import org.json4s.ext.JavaTypesSerializers
 import org.json4s.jackson.JsonMethods.parse
 import org.msgpack.core.MessagePack
 
-import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future }
@@ -288,20 +286,20 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @return a producer record with the correct HTTP headers and value
     */
   def generateReplayAttackProducerRecord(cr: ConsumerRecord[String, String], rejectionMessage: String): ProducerRecord[String, String] = {
-    cr.toProducerRecord(
-      topic = producerRejectionTopic,
-      headers = (cr.headers().toArray :+ new RecordHeader(Values.HTTP_STATUS_CODE_HEADER, Values.HTTP_STATUS_CODE_REJECTION_ERROR.getBytes(UTF_8))).toIterable.asJava,
-      value = Error(error = Values.REPLAY_ATTACK_NAME, causes = Seq(rejectionMessage), requestId = cr.requestIdHeader().orNull).toJson
-    )
+    val payload = Error(error = Values.REPLAY_ATTACK_NAME, causes = Seq(rejectionMessage), requestId = cr.requestIdHeader().orNull).toJson
+    cr.toProducerRecord(producerRejectionTopic, payload)
+      .withExtraHeaders(
+        Values.HTTP_STATUS_CODE_HEADER -> Values.HTTP_STATUS_CODE_REJECTION_ERROR,
+        Values.PREVIOUS_MICROSERVICE -> "Niomon-Filter"
+      )
   }
 
   def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
     logger.warn(s"UPP/Hash already known for requestId: ${cr.requestIdHeader().orNull} message=$rejectionMessage")
     val producerRecordToSend: ProducerRecord[String, String] = generateReplayAttackProducerRecord(cr, rejectionMessage)
     send(producerRecordToSend)
-      .recoverWith {
-        case _ => send(producerRecordToSend)
-      }.recoverWith { case ex: Exception =>
+      .recoverWith { case _ => send(producerRecordToSend) }
+      .recoverWith { case ex: Exception =>
         pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, 2 seconds)
       }.map { x => Some(x) }
   }
@@ -319,12 +317,11 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       cr: ConsumerRecord[String, String],
       ex: Throwable
   ): Future[Any] = {
-
     logger.error(errorMessage, ex.getMessage, ex)
-    val producerRecordToSend = cr.toProducerRecord(
-      topic = producerErrorTopic,
-      value = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
-    )
+    val payload = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
+    val producerRecordToSend = cr
+      .toProducerRecord(producerErrorTopic, payload)
+      .withExtraHeaders(Values.PREVIOUS_MICROSERVICE -> "Niomon-Filter")
     send(producerRecordToSend)
       .recover { case _ => logger.error(s"failure publishing to error topic: $errorMessage") }
   }

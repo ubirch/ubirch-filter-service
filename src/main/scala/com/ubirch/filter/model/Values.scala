@@ -6,6 +6,7 @@ object Values {
   val UPP_CATEGORY = "UPP"
   val PRODUCTION_NAME = "prod"
   val HTTP_STATUS_CODE_HEADER = "http-status-code"
+  val PREVIOUS_MICROSERVICE = "previous-microservice"
   val HTTP_STATUS_CODE_REJECTION_ERROR = "409"
   val FOUND_IN_VERIFICATION_MESSAGE = "the hash/payload has been found by the verification lookup."
   val REPLAY_ATTACK_NAME = "replay_attack"
