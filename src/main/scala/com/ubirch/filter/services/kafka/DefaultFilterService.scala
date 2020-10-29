@@ -34,6 +34,7 @@ import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
 import javax.inject.{ Inject, Singleton }
+import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization
@@ -179,7 +180,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
     val futureResponse: immutable.Seq[Future[Option[RecordMetadata]]] = crs.map { cr =>
 
-      logger.debug("consumer record received with key: " + cr.requestIdHeader().orNull)
+      val requestId = cr.requestIdHeader().orNull
+      logger.debug("consumer record received with key: " + requestId, v("requestId", requestId))
 
       extractData(cr).map { msgEnvelope =>
 
@@ -194,10 +196,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
             case None =>
               makeVerificationLookup(data).flatMap {
                 case Some(_) =>
-                  logger.debug("Found a match in cassandra, launching reactOnReplayAttack")
+                  logger.debug("Found a match in cassandra, launching reactOnReplayAttack", v("requestId", requestId))
                   reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
                 case None =>
-                  logger.debug("Found no match in cassandra")
+                  logger.debug("Found no match in cassandra", v("requestId", requestId))
                   forwardUPP(data)
               }
           }
@@ -271,7 +273,9 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, 2 seconds)
       }
     result.onComplete {
-      case Success(_) => logger.info("Successfully forwarded consumer record with requestId: {}", data.cr.requestIdHeader().orNull)
+      case Success(_) =>
+        val requestId = data.cr.requestIdHeader().orNull
+        logger.info(s"Successfully forwarded consumer record with requestId: $requestId", v("requestId", requestId))
       case _ =>
     }
     result.map { x => Some(x) }
@@ -295,7 +299,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
-    logger.warn(s"UPP/Hash already known for requestId: ${cr.requestIdHeader().orNull} message=$rejectionMessage")
+    val requestId = cr.requestIdHeader().orNull
+    logger.warn(s"UPP/Hash already known for requestId: $requestId message=$rejectionMessage", v("requestId", requestId))
     val producerRecordToSend: ProducerRecord[String, String] = generateReplayAttackProducerRecord(cr, rejectionMessage)
     send(producerRecordToSend)
       .recoverWith { case _ => send(producerRecordToSend) }
