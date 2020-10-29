@@ -23,20 +23,20 @@ import java.util.concurrent.TimeoutException
 
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{Error, Values}
+import com.ubirch.filter.model.{ Error, Values }
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka._
-import com.ubirch.kafka.{MessageEnvelope, RichAnyConsumerRecord}
+import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord }
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
@@ -46,8 +46,8 @@ import org.msgpack.core.MessagePack
 
 import scala.collection.immutable
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
-import scala.language.{implicitConversions, postfixOps}
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.language.{ implicitConversions, postfixOps }
 import scala.util.Success
 
 case class ProcessingData(cr: ConsumerRecord[String, String], upp: ProtocolMessage) {
@@ -182,7 +182,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
     val futureResponse: immutable.Seq[Future[Option[RecordMetadata]]] = crs.map { cr =>
 
-      val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY)
+      val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
       val requestId = cr.requestIdHeader().orNull
       logger.debug(s"consumer record received from $hardwareId with key: $requestId", v("requestId", requestId), v("hardwareId", hardwareId))
 
@@ -277,7 +277,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       }
     result.onComplete {
       case Success(_) =>
-        val hardwareId = data.cr.findHeader(HARDWARE_ID_HEADER_KEY)
+        val hardwareId = data.cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
         val requestId = data.cr.requestIdHeader().orNull
         logger.info(s"Successfully forwarded msg from $hardwareId with requestId: $requestId", v("requestId", requestId), v("hardwareId", hardwareId))
       case _ =>
@@ -303,7 +303,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
-    val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY)
+    val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
     val requestId = cr.requestIdHeader().orNull
     logger.warn(s"UPP/Hash already known for hardwareId: $hardwareId and requestId: $requestId message=$rejectionMessage", v("requestId", requestId), v("hardwareId", hardwareId))
     val producerRecordToSend: ProducerRecord[String, String] = generateReplayAttackProducerRecord(cr, rejectionMessage)
