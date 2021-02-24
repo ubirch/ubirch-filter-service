@@ -1,67 +1,133 @@
 package com.ubirch.filter.model.cache
 
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.StrictLogging
-import com.ubirch.filter.ConfPaths.RedisConfPaths._
+import com.typesafe.scalalogging.LazyLogging
+import com.ubirch.filter.ConfPaths.RedisConfPaths
 import com.ubirch.filter.services.Lifecycle
 import monix.execution.Scheduler
-import scredis.Redis
-import scredis.exceptions.RedisIOException
-import scredis.protocol.AuthConfig
+import org.redisson.Redisson
+import org.redisson.api.{RMapCache, RedissonClient}
 
+import java.net.UnknownHostException
+import java.util.concurrent.TimeUnit
+import java.util.function.BiConsumer
 import javax.inject.{Inject, Singleton}
-import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Future, Promise}
 
+/**
+  * Cache implementation for redis with a Map that stores the
+  * payload/hash as a key and a boolean as the value that is always true
+  */
 @Singleton
-class CacheImpl @Inject()(config: Config, lifecycle: Lifecycle)
-                         (implicit scheduler: Scheduler) extends Cache with StrictLogging {
+class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit scheduler: Scheduler)
+  extends Cache with LazyLogging with RedisConfPaths {
 
-  private val host = config.getString(REDIS_MAIN_HOST)
-  private val port = config.getInt(REDIS_PORT)
-  private val index = config.getInt(REDIS_INDEX)
-  private val cacheTTL = config.getInt(REDIS_CACHE_TTL)
-
+  private val port: String = config.getString(REDIS_PORT)
   private val password: String = config.getString(REDIS_PASSWORD)
-  private val authOpt =
-    if (password == "") None
-    else Some(AuthConfig(None, password))
+  private val evaluatedPW = if (password == "") null else password
+  private val useReplicated: Boolean = config.getBoolean(REDIS_USE_REPLICATED)
+  private val cacheName: String = config.getString(REDIS_CACHE_NAME)
+  private val cacheTTL: Long = config.getLong(REDIS_CACHE_TTL)
+  val redisConf = new org.redisson.config.Config()
+  private val prefix = "redis://"
 
   /**
-    * This redis instance doesn't connect yet. On the first access
-    * a connection will be tried to become established. After that
-    * the instance keeps the connection open until a certain timeout
-    * is reached. (Haven't found the exact number yet.) For further
-    * configurations look here:
-    * https://github.com/scredis/scredis/blob/master/src/main/resources/reference.conf
+    * Uses replicated redis server, when used in dev/prod environment.
     */
-  private val redis: Redis = Redis(host, port, authOpt, index)
+  if (useReplicated) {
+    val mainNode = prefix ++ config.getString(REDIS_MAIN_HOST) ++ ":" ++ port
+    val replicatedNode = prefix ++ config.getString(REDIS_REPLICATED_HOST) ++ ":" ++ port
+    redisConf.useReplicatedServers().addNodeAddress(mainNode, replicatedNode).setPassword(evaluatedPW)
+  } else {
+    val singleNode: String = prefix ++ config.getString(REDIS_HOST) ++ ":" ++ port
+    redisConf.useSingleServer().setAddress(singleNode).setPassword(evaluatedPW)
+  }
+
+  private var redisson: RedissonClient = _
+  private var cache: RMapCache[Array[Byte], String] = _
+
+  private val initialDelay = 1.seconds
+  private val repeatingDelay = 2.second
+
+  /**
+    * Scheduler trying to connect to redis server with repeating delay if it's not available on startup.
+    */
+  private val c = scheduler.scheduleAtFixedRate(initialDelay, repeatingDelay) {
+    try {
+      redisson = Redisson.create(redisConf)
+      cache = redisson.getMapCache[Array[Byte], String](cacheName)
+      stopConnecting()
+      logger.info("connection to redis cache has been established.")
+    } catch {
+      //Todo: should I differentiate? I don't really implement different behaviour till now at least.
+      case ex: UnknownHostException =>
+        logger.info("redis error: not able to create connection: ", ex.getMessage, ex)
+      case ex: org.redisson.client.RedisConnectionException =>
+        logger.info("redis error: not able to create connection: ", ex.getMessage, ex)
+      case ex: Exception =>
+        logger.info("redis error: not able to create connection: ", ex.getMessage, ex)
+    }
+  }
+
+  private def stopConnecting(): Unit = {
+    c.cancel()
+  }
 
   /**
     * Checks if the hash/payload already is stored in the cache.
     *
     * @param hash key
-    * @return optional value
+    * @return value to the key, null if key doesn't exist yet
     */
-  @throws[RedisIOException]
+  @throws[NoCacheConnectionException]
   def get(hash: Array[Byte]): Future[Option[String]] = {
-    redis.get(new String(hash))
+    if (cache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    else {
+      val p = Promise[Option[String]]()
+
+      val listener = new BiConsumer[String, Throwable] {
+        override def accept(t: String, u: Throwable): Unit = {
+          if (u != null)
+            p.failure(u)
+          else
+            p.success(Option(t))
+        }
+      }
+
+      cache.getAsync(hash).onComplete(listener)
+      p.future
+    }
   }
 
   /**
-    * Sets a new key value pair to the cache or overwrites an
-    * old one.
+    * Sets a new key value pair to the cache.
     *
     * @param hash key
-    * @param upp  value
+    * @return previous associated value for this key or null if
+    *         key is set for the first time
     */
-  @throws[RedisIOException]
-  def set(hash: Array[Byte], upp: String): Future[Unit] = {
-    redis.setEX(new String(hash), upp, cacheTTL * 60)
+  @throws[NoCacheConnectionException]
+  def set(hash: Array[Byte], upp: String): Future[Option[String]] = {
+    if (cache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    else {
+      val p = Promise[Option[String]]()
+      val listener = new BiConsumer[String, Throwable] {
+        override def accept(t: String, u: Throwable): Unit = {
+          if (u != null)
+            p.failure(u)
+          else
+            p.success(Option(t))
+        }
+      }
+      cache.putAsync(hash, upp, cacheTTL, TimeUnit.MINUTES).onComplete(listener)
+      p.future
+    }
   }
 
   lifecycle.addStopHook { () =>
-    logger.info("Shutting down Redis if filter service.")
-    Future.successful(redis.quit())
+    logger.info("Shutting down Redis: " + cacheName)
+    Future.successful(redisson.shutdown())
   }
 
 }
