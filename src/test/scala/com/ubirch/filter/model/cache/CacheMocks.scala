@@ -17,8 +17,8 @@
 package com.ubirch.filter.model.cache
 
 import java.util.concurrent.TimeoutException
-
 import javax.inject.Singleton
+import scala.concurrent.Future
 
 /**
   * Different cache mocks for testing purposes.
@@ -26,23 +26,23 @@ import javax.inject.Singleton
 
 class CacheMockAlwaysException extends Cache {
 
-  def get(hash: Array[Byte]): Option[String] = throw new TimeoutException()
+  def get(hash: Array[Byte]): Future[Option[String]] = Future.failed(new TimeoutException())
 
-  def set(hash: Array[Byte], upp: String): Unit = throw new TimeoutException()
+  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.failed(new TimeoutException())
 }
 
 class CacheMockAlwaysFalse extends Cache {
 
-  def get(hash: Array[Byte]): Option[String] = None
+  def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(None)
 
-  def set(hash: Array[Byte], upp: String): Unit = ()
+  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful()
 }
 
 class CacheMockAlwaysTrue extends Cache {
 
-  def get(hash: Array[Byte]): Option[String] = Some("value")
+  def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(Some("value"))
 
-  def set(hash: Array[Byte], upp: String): Unit = ()
+  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful()
 }
 
 /**
@@ -52,12 +52,12 @@ class CacheMockAlwaysTrue extends Cache {
 class CustomCache extends Cache {
   var list: List[Array[Byte]] = List[Array[Byte]]()
 
-  def get(hash: Array[Byte]): Option[String] = {
+  def get(hash: Array[Byte]): Future[Option[String]] = {
     list = list :+ hash
-    None
+    Future.successful(None)
   }
 
-  def set(hash: Array[Byte], upp: String): Unit = ()
+  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful()
 
 }
 

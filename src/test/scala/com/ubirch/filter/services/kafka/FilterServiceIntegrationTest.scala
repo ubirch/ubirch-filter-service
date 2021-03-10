@@ -16,41 +16,40 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.concurrent.TimeoutException
-import java.util.{ Base64, UUID }
-
 import com.github.nosan.embedded.cassandra.cql.CqlScript
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
-import com.typesafe.config.{ Config, ConfigValueFactory }
+import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
-import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue, CustomCache }
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue, CustomCache}
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{ CassandraFinderAlwaysFound, Error, Values }
+import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Error, Values}
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
-import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
+import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
+import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.Formats
 import org.json4s.JsonAST._
 import org.scalatest._
 import redis.embedded.RedisServer
 
-import scala.concurrent.duration._
-import scala.concurrent.{ Await, ExecutionContext }
+import java.util.concurrent.TimeoutException
+import java.util.{Base64, UUID}
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, ExecutionContext}
 import scala.language.postfixOps
 
 /**
   * This class provides all integration tests, except for those testing a missing redis connection on startup.
   * The Kafka config has to be inside each single test to enable parallel testing with different ports.
   */
-class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
+class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -174,6 +173,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
       def FakeInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+
         override def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinderAlwaysFound])
       })) {}
 
@@ -234,7 +234,9 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
       def FakeInjectorCustomCache(configProvider: ConfigProvider): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(configProvider)
+
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[ExceptionFilterServ])
+
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CustomCache])
       })) {}
 
@@ -331,6 +333,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
                   ConfigValueFactory.fromAnyRef(false)
                 )
         })
+
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
       })) {}
 
@@ -362,7 +365,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
       val data = ProcessingData(cr, protocolMessage)
       val Injector = FakeSimpleInjector(ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS)
       val filterConsumer = Injector.get[DefaultFilterService]
-      val result = Await.result(filterConsumer.makeVerificationLookup(data), 5.second)
+      val result = Await.result(filterConsumer.makeVerificationLookup(data), 5.seconds)
       implicit val ec: ExecutionContext = Injector.get[ExecutionContext]
       result match {
         case Some(_) => fail()
@@ -403,6 +406,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
       def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
       })) {}
 
@@ -437,6 +441,7 @@ class FilterServiceIntegrationTest extends WordSpec with TestBase with EmbeddedR
 
       def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
       })) {}
 

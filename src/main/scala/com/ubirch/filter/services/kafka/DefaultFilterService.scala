@@ -16,27 +16,20 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.io.ByteArrayOutputStream
-import java.nio.charset.StandardCharsets
-import java.util.Base64
-import java.util.concurrent.TimeoutException
-
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{ Error, Values }
+import com.ubirch.filter.model.{Error, Values}
 import com.ubirch.filter.services.Lifecycle
-import com.ubirch.kafka._
-import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord }
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
+import com.ubirch.kafka.{MessageEnvelope, RichAnyConsumerRecord, _}
 import com.ubirch.protocol.ProtocolMessage
-import javax.inject.{ Inject, Singleton }
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
@@ -44,14 +37,20 @@ import org.json4s.ext.JavaTypesSerializers
 import org.json4s.jackson.JsonMethods.parse
 import org.msgpack.core.MessagePack
 
+import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets
+import java.util.Base64
+import java.util.concurrent.TimeoutException
+import javax.inject.{Inject, Singleton}
 import scala.collection.immutable
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, Future }
-import scala.language.{ implicitConversions, postfixOps }
+import scala.concurrent.{ExecutionContext, Future}
+import scala.language.{implicitConversions, postfixOps}
 import scala.util.Success
 
 case class ProcessingData(cr: ConsumerRecord[String, String], upp: ProtocolMessage) {
   def payloadHash: Array[Byte] = upp.getPayload.asText().getBytes(StandardCharsets.UTF_8)
+
   def payloadString: String = upp.getPayload.asText()
 }
 
@@ -87,7 +86,7 @@ trait FilterService {
     * @param data The data to become processed.
     * @return A boolean if the hash/payload has been already processed once or not.
     */
-  def cacheContainsHash(data: ProcessingData): Option[String]
+  def cacheContainsHash(data: ProcessingData): Future[Option[String]]
 
   /**
     * Method that forwards the incoming consumer record via Kafka in case no replay
@@ -174,7 +173,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   implicit val formats: Formats = FilterService.formats
 
-  val msgPackConfig = new MessagePack.PackerConfig().withStr8FormatSupport(false)
+  private val msgPackConfig = new MessagePack.PackerConfig().withStr8FormatSupport(false)
   /**
     * Method that processes all consumer records of the incoming batch (Kafka message).
     */
@@ -193,7 +192,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         if (!filterStateActive && ubirchEnvironment != Values.PRODUCTION_NAME) {
           forwardUPP(data)
         } else {
-          cacheContainsHash(data) match {
+          cacheContainsHash(data) flatMap {
             case Some(_) =>
               reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
             case None =>
@@ -225,10 +224,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
-  def cacheContainsHash(data: ProcessingData): Option[String] = {
-    try {
-      cache.get(data.payloadHash)
-    } catch {
+  def cacheContainsHash(data: ProcessingData): Future[Option[String]] = {
+    cache.get(data.payloadHash).recover {
       case ex: Exception =>
         publishErrorMessage(s"unable to make cache lookup '${data.cr.requestIdHeader().orNull}'.", data.cr, ex)
         None
@@ -245,7 +242,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       case ex: TimeoutException =>
         val requestId = data.cr.requestIdHeader().orNull
         publishErrorMessage(s"cassandra timeout while verification lookup for $requestId.", data.cr, ex)
-        throw NeedForPauseException(s"cassandra timeout while verification lookup for $requestId: ${ex.getMessage}", ex.getMessage, Some(2 seconds))
+        throw NeedForPauseException(s"cassandra timeout while verification lookup for $requestId: ${ex.getMessage}", ex.getMessage, Some(FiniteDuration(2, SECONDS)))
     }
   }
 
@@ -273,7 +270,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
       .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
       .recoverWith { case ex =>
-        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, 2 seconds)
+        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, FiniteDuration(2, SECONDS))
       }
     result.onComplete {
       case Success(_) =>
@@ -310,7 +307,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     send(producerRecordToSend)
       .recoverWith { case _ => send(producerRecordToSend) }
       .recoverWith { case ex: Exception =>
-        pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, 2 seconds)
+        pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, FiniteDuration(2, SECONDS))
       }.map { x => Some(x) }
   }
 

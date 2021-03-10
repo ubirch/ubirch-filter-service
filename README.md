@@ -1,10 +1,14 @@
 # UBIRCH FILTER SERVICE
 
-The Ubirch Filter Service is a service concerned with checking incoming requests regarding any attacks. 
-For now it's only protecting against replay attacks by checking duplications of messages. It should get extended in 
-future.
+The filter service shall on the one hand prevent duplications of UPPs and on the other hand prevent simple Replay
+Attacks.
 
-For testing it might get deactivated.
+## Processing
+
+When a UPP is being processed, first the cache is checked for a UPP with the same hash. If this is the case, the UPP
+either gets forwarded or rejected (and send to the error topic) depending on the hint of the incoming and the cached
+UPP. In any case, the new UPP for that hash is being stored in the cache. In certain cases, if there is no cached UPP
+with the same hash, Cassandra is queried to check if there really is no UPP stored with the same hash.
 
 ## Install
 
