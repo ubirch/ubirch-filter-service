@@ -56,6 +56,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
   val cr = new ConsumerRecord[String, String]("topic", 1, 1, "1234", "false")
   private val payload = UUID.randomUUID().toString
   val protocolMessage = new ProtocolMessage(2, UUID.randomUUID(), 0, payload)
+  protocolMessage.setSignature("1111".getBytes())
   private val fakeData = ProcessingData(cr, protocolMessage)
 
   def FakeFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {

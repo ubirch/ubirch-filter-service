@@ -35,14 +35,14 @@ class CacheMockAlwaysFalse extends Cache {
 
   def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(None)
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful()
+  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
 }
 
 class CacheMockAlwaysTrue extends Cache {
 
   def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(Some("value"))
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful()
+  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
 }
 
 /**
@@ -57,7 +57,7 @@ class CustomCache extends Cache {
     Future.successful(None)
   }
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful()
+  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
 
 }
 

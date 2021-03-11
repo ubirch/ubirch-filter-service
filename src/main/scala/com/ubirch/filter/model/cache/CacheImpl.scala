@@ -66,8 +66,8 @@ class CacheImpl @Inject()(config: Config, lifecycle: Lifecycle)
     */
   @throws[NoCacheConnectionException]
   def set(hash: Array[Byte], upp: String): Future[Unit] = {
-    if (redis == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
-    redis.setEX(new String(hash), upp, cacheTTL * 60)
+    if (redis == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    else redis.setEX(new String(hash), upp, cacheTTL * 60)
   }
 
   lifecycle.addStopHook { () =>
