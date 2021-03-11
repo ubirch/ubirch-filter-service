@@ -16,28 +16,27 @@
 
 package com.ubirch.filter.services.kafka
 
-import java.util.concurrent.TimeoutException
-import java.util.{ Base64, UUID }
-
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
-import com.typesafe.config.{ Config, ConfigValueFactory }
+import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
 import com.ubirch.filter.model.Error
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
-import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
-import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
+import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
+import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.Formats
-import org.json4s.JsonAST.{ JObject, JString }
+import org.json4s.JsonAST.{JObject, JString}
 import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
 
+import java.util.concurrent.TimeoutException
+import java.util.{Base64, UUID}
 import scala.language.postfixOps
 import scala.sys.process._
 
@@ -111,7 +110,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
   "Missing redis connection" must {
 
-    "should cause error messages" in {
+    "cause error messages" in {
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
@@ -138,7 +137,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
           msgEnvelope.ubirchPacket.getUUID
 
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "NoCacheConnectionException"
+        cacheError1.error mustBe "RedisIOException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
 
       }
@@ -162,7 +161,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         val (_, conf) = startKafka(bootstrapServers)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "NoCacheConnectionException"
+        cacheError1.error mustBe "RedisIOException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
@@ -171,8 +170,8 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
         val cacheError2 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError2.error mustBe "NoCacheConnectionException"
-        cacheError2.causes mustBe List("unable to make cache lookup 'null'.")
+        cacheError1.error mustBe "RedisIOException"
+        cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
 
       }
     }
@@ -198,7 +197,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope1.ubirchPacket.getUUID
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "NoCacheConnectionException"
+        cacheError1.error mustBe "RedisIOException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
         redis = new RedisServer(6379)
         redis.start()

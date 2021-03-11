@@ -1,17 +1,17 @@
 package com.ubirch.filter.model.cache
 
-import java.nio.charset.StandardCharsets
-
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
-import com.typesafe.config.{ Config, ConfigValueFactory }
+import com.typesafe.config.{Config, ConfigValueFactory}
 import com.ubirch.filter.ConfPaths.RedisConfPaths
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.{ Binder, InjectorHelper, TestBase }
+import com.ubirch.filter.{AsyncTestBase, Binder, InjectorHelper}
 import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
 
-class RedisCacheTests extends TestBase with EmbeddedRedis with BeforeAndAfter {
+import java.nio.charset.StandardCharsets
+
+class RedisCacheTests extends AsyncTestBase with EmbeddedRedis with BeforeAndAfter {
 
   var redis: RedisServer = _
 
@@ -33,9 +33,11 @@ class RedisCacheTests extends TestBase with EmbeddedRedis with BeforeAndAfter {
           ConfigValueFactory.fromAnyRef(ttl)
         )
       }
+
       def testInjector(ttl: Int): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProviderTtl(ttl))
       })) {}
+
       val Injector = testInjector(1)
       Thread.sleep(5000)
       val redisCache = Injector.get[Cache]
@@ -43,10 +45,12 @@ class RedisCacheTests extends TestBase with EmbeddedRedis with BeforeAndAfter {
       val hash = "coucou".getBytes(StandardCharsets.UTF_8)
       val upp = "SALUT"
       redisCache.set(hash, upp)
-      redisCache.get(hash) mustBe Some(upp)
+      Thread.sleep(500)
+      redisCache.get(hash).map(_ mustBe Some(upp))
       Thread.sleep(60000)
-      redisCache.get(hash) mustBe None
+      redisCache.get(hash).map(_ mustBe None)
     }
+
   }
 
 }
