@@ -114,6 +114,13 @@
             <version>1.0.4-SNAPSHOT</version>
         </dependency>
 
+        <!-- redis client scredis -->
+        <dependency>
+            <groupId>com.github.scredis</groupId>
+            <artifactId>scredis_2.12</artifactId>
+            <version>2.4.3</version>
+        </dependency>
+
         <dependency>
             <groupId>com.google.inject</groupId>
             <artifactId>guice</artifactId>
@@ -151,12 +158,6 @@
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
             <version>1.3.2</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.redisson</groupId>
-            <artifactId>redisson</artifactId>
-            <version>3.10.5</version>
         </dependency>
 
         <dependency>
