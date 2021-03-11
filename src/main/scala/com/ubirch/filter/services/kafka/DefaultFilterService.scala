@@ -71,7 +71,7 @@ trait FilterService {
     * down an exception is thrown to make the underlying Kafka app wait before continuing with
     * processing the same messages once more.
     *
-    * @param data    The data to become processed.
+    * @param data The data to become processed.
     * @throws NeedForPauseException to communicate the underlying app to pause the processing
     *                               of further messages.
     * @return Returns the HTTP response.
@@ -108,7 +108,6 @@ trait FilterService {
     * before continuing with processing the same messages once more.
     *
     * @param cr               The consumer record of the replay attack.
-    *
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
   def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
@@ -136,11 +135,11 @@ object FilterService {
 
 abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)
   extends FilterService
-  with ExpressKafka[String, String, Unit]
-  with LazyLogging
-  with ConsumerConfPaths
-  with ProducerConfPaths
-  with FilterConfPaths {
+    with ExpressKafka[String, String, Unit]
+    with LazyLogging
+    with ConsumerConfPaths
+    with ProducerConfPaths
+    with FilterConfPaths {
 
   override val prefix: String = "Ubirch"
 
@@ -151,6 +150,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   override val consumerGroupId: String = config.getString(GROUP_ID)
   override val consumerMaxPollRecords: Int = config.getInt(MAX_POOL_RECORDS)
   override val consumerGracefulTimeout: Int = config.getInt(GRACEFUL_TIMEOUT)
+
   override def consumerBootstrapServers: String = config.getString(CONSUMER_BOOTSTRAP_SERVERS)
 
   override val producerBootstrapServers: String = config.getString(PRODUCER_BOOTSTRAP_SERVERS)
@@ -234,11 +234,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   def makeVerificationLookup(data: ProcessingData): Future[Option[String]] = {
 
-    try {
-      val trimmedValue = trimPayload(data.payloadString)
-      finder.findUPP(trimmedValue)
-    } catch {
-      //Todo: Should I catch further Exceptions?
+    val trimmedValue = trimPayload(data.payloadString)
+    finder.findUPP(trimmedValue).recover {
       case ex: TimeoutException =>
         val requestId = data.cr.requestIdHeader().orNull
         publishErrorMessage(s"cassandra timeout while verification lookup for $requestId.", data.cr, ex)
@@ -249,6 +246,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   /**
     * Sometimes the payload contains " at the beginning and the end of the payload, which makes cassandra go nuts and prevent
     * the value from being found
+    *
     * @param payload the payload to (eventually) trim
     * @return a trimmed string on which the first and last char will not be "
     */
@@ -261,9 +259,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
-    try {
-      cache.set(data.payloadHash, b64(rawPacket(data.upp)))
-    } catch {
+    cache.set(data.payloadHash, b64(rawPacket(data.upp))).recover {
       case ex: Exception =>
         publishErrorMessage(s"unable to add ${data.cr.requestIdHeader().orNull} to cache.", data.cr, ex)
     }
@@ -286,7 +282,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   /**
     * Helper method that generates the producer record that will be sent when a replay attack is detected
-    * @param cr The consumerRecord on which to act
+    *
+    * @param cr               The consumerRecord on which to act
     * @param rejectionMessage why the message was rejected
     * @return a producer record with the correct HTTP headers and value
     */
@@ -319,11 +316,9 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(
-      errorMessage: String,
-      cr: ConsumerRecord[String, String],
-      ex: Throwable
-  ): Future[Any] = {
+  private def publishErrorMessage(errorMessage: String,
+                                  cr: ConsumerRecord[String, String],
+                                  ex: Throwable): Future[Any] = {
     logger.error(errorMessage, ex.getMessage, ex)
     val payload = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
     val producerRecordToSend = cr
@@ -343,7 +338,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     val out = new ByteArrayOutputStream(255)
     val packer = msgPackConfig.newPacker(out)
 
-    if (upp.getSigned != null) { packer.writePayload(upp.getSigned) }
+    if (upp.getSigned != null) packer.writePayload(upp.getSigned)
     packer.packBinaryHeader(upp.getSignature.length)
     packer.writePayload(upp.getSignature)
     packer.flush()
@@ -368,11 +363,11 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   * a ubirch database is questioned if the hash/payload has already been processed by the
   * event-log. Only if no replay attack was found the message is forwarded to the event-log system.
   *
-  * @param cache The cache used to check if a message has already been received before.
+  * @param cache  The cache used to check if a message has already been received before.
   * @param finder The finder used to check if a message has already been received before in the event log in case
   *               the cache is down
   * @param config The config file containing the configuration needed for the service
   * @author ${user.name}
   */
 @Singleton
-class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)
+class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)
