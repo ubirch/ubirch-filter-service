@@ -16,31 +16,29 @@
 
 package com.ubirch.filter.services.kafka
 
-import com.github.nosan.embedded.cassandra.cql.CqlScript
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
-import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysFalse, CacheMockAlwaysTrue, CustomCache}
+import com.ubirch.filter.model.cache.{Cache, CacheStoreMock, CustomCache}
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Error, Values}
 import com.ubirch.filter.services.config.ConfigProvider
+import com.ubirch.filter.util.MessageEnvelopeGenerator.generateMsgEnvelope
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
-import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.Formats
-import org.json4s.JsonAST._
 import org.scalatest._
 import redis.embedded.RedisServer
 
+import java.util.Base64
 import java.util.concurrent.TimeoutException
-import java.util.{Base64, UUID}
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext}
 import scala.language.postfixOps
@@ -66,9 +64,9 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-        ConfigValueFactory.fromAnyRef(bootstrapServers)
-      )
+      ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+      ConfigValueFactory.fromAnyRef(bootstrapServers)
+    )
   }
 
   /**
@@ -122,20 +120,6 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
     logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
   }
 
-  /**
-    * Method to generate a message envelope as expected by the filter service.
-    *
-    * @param payload Payload is a random value if not defined explicitly.
-    * @return
-    */
-  private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
-
-    val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
-    pm.setSignature("1111".getBytes())
-    val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
-    MessageEnvelope(pm, ctxt)
-  }
-
   "FilterService" must {
 
     "forward message first time and detect reply attack with help of redis cache when send a second time" in {
@@ -144,11 +128,12 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       withRunningKafka {
-        Thread.sleep(5000)
-        val msgEnvelope = generateMessageEnvelope()
-        //publish message first time
+        Thread.sleep(1000)
+        val msgEnvelope = generateMsgEnvelope()
         val Injector = FakeSimpleInjector(bootstrapServers)
         val conf = Injector.get[Config]
+
+        //publish message first time
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
         Thread.sleep(1000)
         val consumer = Injector.get[DefaultFilterService]
@@ -185,7 +170,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
         fakeFilter.consumption.startPolling()
         Thread.sleep(1000)
 
-        val msgEnvelope = generateMessageEnvelope()
+        val msgEnvelope = generateMsgEnvelope()
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
         val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
@@ -249,15 +234,13 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
         val cache = Injector.get[Cache].asInstanceOf[CustomCache]
         fakeFilterService.consumption.startPolling()
 
-        val msgEnvelope1 = generateMessageEnvelope()
-        val msgEnvelope2 = generateMessageEnvelope()
+        val msgEnvelope1 = generateMsgEnvelope(payload = "6767".getBytes)
+        val msgEnvelope2 = generateMsgEnvelope(payload = "6868".getBytes)
 
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope1)
-        Thread.sleep(5000)
+        Thread.sleep(4000)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope2)
-
-        Thread.sleep(5000)
-        println(cache.list)
+        Thread.sleep(4000)
 
         /**
           * the first two messages should be msgEnvelope1
@@ -283,12 +266,12 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
             ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-              ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-              ConfigValueFactory.fromAnyRef(bootstrapServers)
-            ).withValue(
-                FilterConfPaths.FILTER_STATE,
-                ConfigValueFactory.fromAnyRef(false)
-              )
+            ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            FilterConfPaths.FILTER_STATE,
+            ConfigValueFactory.fromAnyRef(false)
+          )
         })
       })) {}
 
@@ -300,7 +283,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
         val filter = Injector.get[AbstractFilterService]
         filter.consumption.startPolling()
 
-        val msgEnvelope = generateMessageEnvelope()
+        val msgEnvelope = generateMsgEnvelope()
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
         val forwardedMessage = consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
@@ -323,18 +306,18 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
             ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-              ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-              ConfigValueFactory.fromAnyRef(bootstrapServers)
-            ).withValue(
-                FilterConfPaths.ENVIRONMENT,
-                ConfigValueFactory.fromAnyRef(Values.PRODUCTION_NAME)
-              ).withValue(
-                  FilterConfPaths.FILTER_STATE,
-                  ConfigValueFactory.fromAnyRef(false)
-                )
+            ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            FilterConfPaths.ENVIRONMENT,
+            ConfigValueFactory.fromAnyRef(Values.PRODUCTION_NAME)
+          ).withValue(
+            FilterConfPaths.FILTER_STATE,
+            ConfigValueFactory.fromAnyRef(false)
+          )
         })
 
-        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
       })) {}
 
       withRunningKafka {
@@ -343,12 +326,9 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
         val conf = Injector.get[Config]
         val filter = Injector.get[AbstractFilterService]
         filter.consumption.startPolling()
-
-        val msgEnvelope = generateMessageEnvelope()
+        val msgEnvelope = generateMsgEnvelope()
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
-
         Thread.sleep(1000)
-
         val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
         rejection.causes mustBe List(Values.FOUND_IN_CACHE_MESSAGE)
         rejection.error mustBe Values.REPLAY_ATTACK_NAME
@@ -358,11 +338,10 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
 
   "Verification Lookup" must {
 
-    "return NotFound if hash hasn't been processed yet." in {
+    "return None if hash hasn't been found in Cassandra/ processed yet." in {
       val cr = new ConsumerRecord[String, String]("topic", 1, 1, "key", "Teststring")
-      val payload = UUID.randomUUID().toString
-      val protocolMessage = new ProtocolMessage(2, UUID.randomUUID(), 0, payload)
-      val data = ProcessingData(cr, protocolMessage)
+      val msgEnv = generateMsgEnvelope()
+      val data = ProcessingData(cr, msgEnv.ubirchPacket)
       val Injector = FakeSimpleInjector(ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS)
       val filterConsumer = Injector.get[DefaultFilterService]
       val result = Await.result(filterConsumer.makeVerificationLookup(data), 5.seconds)
@@ -380,108 +359,11 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       val payload =
         "v1jjADSpJFPl7vTg8gsiui2aTOCL1v4nYrmiTePvcxNBt1x/+JoApHOLa4rjGGEz72PusvGXbF9t6qe8Kbck/w=="
       val decodedPayload = Base64.getDecoder.decode(payload)
-      val envelope = generateMessageEnvelope(payload)
+      val envelope = generateMsgEnvelope(payload = payload)
       assert(envelope.ubirchPacket.getPayload.asText() == payload)
       assert(envelope.ubirchPacket.getPayload.binaryValue() sameElements decodedPayload)
     }
   }
-
-  "Cassandra lookup" must {
-
-    /**
-      * This test insert a certain value in cassandra (the payload) and verify that the filter finds it
-      */
-    "consume and process successfully when Found" in {
-
-      cassandra.executeScripts(
-        CqlScript.statements(
-          insertEventSql
-        )
-      )
-
-      implicit val kafkaConfig: EmbeddedKafkaConfig =
-        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
-
-      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
-
-      def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
-
-        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
-      })) {}
-
-      withRunningKafka {
-        val msgEnvelope = generateMessageEnvelope(payload)
-        val Injector = testInjector(bootstrapServers)
-        val conf = Injector.get[Config]
-        publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
-        Thread.sleep(1000)
-        val consumer = Injector.get[DefaultFilterService]
-        consumer.consumption.startPolling()
-        Thread.sleep(1000)
-
-        val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
-        rejection.causes mustBe List(Values.FOUND_IN_VERIFICATION_MESSAGE)
-        rejection.error mustBe Values.REPLAY_ATTACK_NAME
-      }
-
-    }
-
-    "consume and process successfully when not found" in {
-      cassandra.executeScripts(
-        CqlScript.statements(
-          insertEventSql
-        )
-      )
-
-      implicit val kafkaConfig: EmbeddedKafkaConfig =
-        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
-
-      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
-
-      def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
-
-        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
-      })) {}
-
-      withRunningKafka {
-        val msgEnvelope = generateMessageEnvelope(payload + ",")
-        val Injector = testInjector(bootstrapServers)
-        val conf = Injector.get[Config]
-        publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
-        Thread.sleep(1000)
-        val consumer = Injector.get[DefaultFilterService]
-        consumer.consumption.startPolling()
-        Thread.sleep(1000)
-
-        try {
-          consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
-          fail()
-        } catch {
-          case _: java.util.concurrent.TimeoutException =>
-          case _: Throwable => fail()
-        }
-      }
-
-    }
-  }
-
-  val payload = "c29tZSBieXRlcyEAAQIDnw=="
-
-  val insertEventSql: String =
-    s"""
-       |INSERT INTO events (id, customer_id, service_class, category, event, event_time, year, month, day, hour, minute, second, milli, signature, nonce)
-       | VALUES ('$payload', 'customer_id', 'service_class', '${Values.UPP_CATEGORY}', '{
-       |   "hint":0,
-       |   "payload":"$payload",
-       |   "signature":"5aTelLQBerVT/vJiL2qjZCxWxqlfwT/BaID0zUVy7LyUC9nUdb02//aCiZ7xH1HglDqZ0Qqb7GyzF4jtBxfSBg==",
-       |   "signed":"lRKwjni1ymWXEeiBhcg+pwAOTQCwc29tZSBieXRlcyEAAQIDnw==",
-       |   "uuid":"8e78b5ca-6597-11e8-8185-c83ea7000e4d",
-       |   "version":34
-       |}', '2019-01-29T17:00:28.333Z', 2019, 5, 2, 19, 439, 16, 0, '0681D35827B17104A2AACCE5A08C4CD1BC8A5EF5EFF4A471D15976693CC0D6D67392F1CACAE63565D6E521D2325A998CDE00A2FEF5B65D0707F4158000EB6D05',
-       |'34376336396166392D336533382D343665652D393063332D616265313364383335353266');
-    """.stripMargin
 
 }
 

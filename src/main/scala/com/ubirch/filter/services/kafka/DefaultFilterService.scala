@@ -19,6 +19,7 @@ package com.ubirch.filter.services.kafka
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.model.Values.{UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE}
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.model.{Error, Values}
@@ -27,6 +28,7 @@ import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.kafka.{MessageEnvelope, RichAnyConsumerRecord, _}
 import com.ubirch.protocol.ProtocolMessage
+import com.ubirch.protocol.codec.MsgPackProtocolDecoder
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
@@ -135,11 +137,11 @@ object FilterService {
 
 abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)
   extends FilterService
-  with ExpressKafka[String, String, Unit]
-  with LazyLogging
-  with ConsumerConfPaths
-  with ProducerConfPaths
-  with FilterConfPaths {
+    with ExpressKafka[String, String, Unit]
+    with LazyLogging
+    with ConsumerConfPaths
+    with ProducerConfPaths
+    with FilterConfPaths {
 
   override val prefix: String = "Ubirch"
 
@@ -174,6 +176,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   implicit val formats: Formats = FilterService.formats
 
   private val msgPackConfig = new MessagePack.PackerConfig().withStr8FormatSupport(false)
+  private val base64Decoder = Base64.getDecoder
   /**
     * Method that processes all consumer records of the incoming batch (Kafka message).
     */
@@ -192,22 +195,24 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         if (!filterStateActive && ubirchEnvironment != Values.PRODUCTION_NAME) {
           forwardUPP(data)
         } else {
-          cacheContainsHash(data) flatMap {
-            case Some(_) =>
-              reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
-            case None =>
-              makeVerificationLookup(data).flatMap {
-                case Some(_) =>
-                  logger.debug("Found a match in cassandra, launching reactOnReplayAttack", v("requestId", requestId), v("hardwareId", hardwareId))
-                  reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
-                case None =>
-                  logger.debug("Found no match in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
-                  forwardUPP(data)
+
+          decideReactionBasedOnCache(data).flatMap {
+            case RejectUPP => reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
+            case ForwardUPP => forwardUPP(data)
+            case InvestigateFurther =>
+              makeVerificationLookup(data).flatMap { foundUpp =>
+                data.upp.getHint match {
+                  case UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE =>
+                    if (foundUpp.isDefined) forwardUPP(data)
+                    else reactOnReplayAttack(cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
+                  case _ =>
+                    if (foundUpp.isEmpty) forwardUPP(data)
+                    else reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
+                }
               }
           }
         }
       }.getOrElse(Future.successful(None))
-
     }
     Future.sequence(futureResponse).map(_ => ())
 
@@ -232,10 +237,54 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
+  private[services] def decideReactionBasedOnCache(data: ProcessingData): Future[FilterReaction] = {
+
+    cacheContainsHash(data).map {
+      case Some(cachedUpp: String) =>
+        val byteArray = base64Decoder.decode(cachedUpp)
+        val upp = MsgPackProtocolDecoder.getDecoder.decode(byteArray)
+        val cachedHint = upp.getHint
+
+        data.upp.getHint match {
+          case UPP_TYPE_DELETE =>
+            cachedHint match {
+              case UPP_TYPE_DELETE => RejectUPP
+              case _ => ForwardUPP
+            }
+          case UPP_TYPE_ENABLE =>
+            cachedHint match {
+              case UPP_TYPE_ENABLE | UPP_TYPE_DELETE => RejectUPP
+              case _ => ForwardUPP
+            }
+          case UPP_TYPE_DISABLE =>
+            cachedHint match {
+              case UPP_TYPE_DISABLE | UPP_TYPE_DELETE => RejectUPP
+              case _ => ForwardUPP
+            }
+          case _ => RejectUPP
+        }
+
+      case None =>
+        InvestigateFurther
+
+    }.recover {
+      case ex =>
+        logger.error("something went wrong checking for hint/ type of cached upp", ex)
+        InvestigateFurther
+    }
+  }
+
   def makeVerificationLookup(data: ProcessingData): Future[Option[String]] = {
 
     val trimmedValue = trimPayload(data.payloadString)
-    finder.findUPP(trimmedValue).recover {
+    finder.findUPP(trimmedValue).map {
+      case Some(string) =>
+        logger.info(s"found string $string in CASSANDRA")
+        Some(string)
+      case None =>
+        logger.info("found nothing in CASSANDRA")
+        None
+    }.recover {
       case ex: TimeoutException =>
         val requestId = data.cr.requestIdHeader().orNull
         publishErrorMessage(s"cassandra timeout while verification lookup for $requestId.", data.cr, ex)
@@ -261,7 +310,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
     cache.set(data.payloadHash, b64(rawPacket(data.upp))).recover {
       case ex: Exception =>
-        publishErrorMessage(s"unable to add ${data.cr.requestIdHeader().orNull} to cache.", data.cr, ex)
+        publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
     }
     val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
       .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
@@ -317,10 +366,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @return
     */
   private def publishErrorMessage(
-      errorMessage: String,
-      cr: ConsumerRecord[String, String],
-      ex: Throwable
-  ): Future[Any] = {
+                                   errorMessage: String,
+                                   cr: ConsumerRecord[String, String],
+                                   ex: Throwable
+                                 ): Future[Any] = {
     logger.error(errorMessage, ex.getMessage, ex)
     val payload = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
     val producerRecordToSend = cr
@@ -336,11 +385,14 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
   }
 
-  private def rawPacket(upp: ProtocolMessage): Array[Byte] = {
+  private[services] def rawPacket(upp: ProtocolMessage): Array[Byte] = {
     val out = new ByteArrayOutputStream(255)
     val packer = msgPackConfig.newPacker(out)
+    //Todo: Error handling if signed doesn't exists
+    if (upp.getSigned != null) {
+      packer.writePayload(upp.getSigned)
+    }
 
-    if (upp.getSigned != null) packer.writePayload(upp.getSigned)
     packer.packBinaryHeader(upp.getSignature.length)
     packer.writePayload(upp.getSignature)
     packer.flush()
@@ -372,4 +424,4 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   * @author ${user.name}
   */
 @Singleton
-class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)
+class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)
