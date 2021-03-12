@@ -203,10 +203,9 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
         val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
 
         msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
-        Thread.sleep(40000)
         val consumer = Injector.get[DefaultFilterService]
         consumer.consumption.startPolling()
-        Thread.sleep(40000)
+        Thread.sleep(4000)
 
         val allUUIDS = list.map(_._1).toSet
         val forwardedMsgs = consumeNumberMessagesFrom[MessageEnvelope](readProducerForwardTopic(conf), 3)
@@ -244,10 +243,10 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
         val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
 
         msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
-        Thread.sleep(40000)
         val consumer = Injector.get[DefaultFilterService]
         consumer.consumption.startPolling()
-        Thread.sleep(40000)
+        Thread.sleep(4000)
+
 
         val rejectionMsgs = consumeNumberMessagesFrom[Error](readProducerRejectionTopic(conf), 3)
         rejectionMsgs.map { rejection =>
