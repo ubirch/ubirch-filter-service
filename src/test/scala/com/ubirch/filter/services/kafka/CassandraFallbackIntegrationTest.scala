@@ -16,13 +16,12 @@ import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.Formats
-import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
 
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
-class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
+class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra with LazyLogging {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -60,26 +59,15 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
     stopCassandra()
   }
 
-  /**
-    * Called after all tests. Not working always unfortunately.
-    */
-  after {
-    logger.info("Shutting off test services - EMBEDDED KAFKA")
-    EmbeddedKafka.stop()
-    EmbeddedKafka.stopZooKeeper()
-    Thread.sleep(1000)
-  }
 
   override protected def beforeEach(): Unit = {
+    EmbeddedKafka.start()
     CollectorRegistry.defaultRegistry.clear()
   }
 
   override protected def afterEach(): Unit = {
-    while (EmbeddedKafka.isRunning) {
-      logger.info("Kafka still running...")
-      Thread.sleep(1000)
-      EmbeddedKafka.stop()
-    }
+    Thread.sleep(1000)
+    EmbeddedKafka.stop()
     logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
   }
 
@@ -168,96 +156,96 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       }
     }
 
-    //    "consume and forward successfully when Found if of type UPP update (hint = 250, 251, 252)" in {
-    //
-    //      val uuid1 = UUID.randomUUID()
-    //      val uuid2 = UUID.randomUUID()
-    //      val uuid3 = UUID.randomUUID()
-    //      val list = List((uuid1, "c29tZSBieXRlcyEAAQIDnw==", 250), (uuid2, "hellohello", 251), (uuid3, "byebye", 252))
-    //
-    //      def addToCassandra(uuid: UUID, payload: String, hint: Int): Unit = {
-    //        cassandra.executeScripts(
-    //          CqlScript.statements(
-    //            insertEventSql(uuid.toString, payload, hint)
-    //          )
-    //        )
-    //      }
-    //
-    //      list.foreach(p => addToCassandra(p._1, p._2, p._3))
-    //
-    //      implicit val kafkaConfig: EmbeddedKafkaConfig =
-    //        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
-    //
-    //      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
-    //
-    //      def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-    //        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
-    //
-    //        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
-    //      })) {}
-    //
-    //      withRunningKafka {
-    //        val Injector = testInjector(bootstrapServers)
-    //        val conf = Injector.get[Config]
-    //
-    //        val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
-    //
-    //        msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
-    //        val consumer = Injector.get[DefaultFilterService]
-    //        consumer.consumption.startPolling()
-    //        Thread.sleep(8000)
-    //
-    //        val allUUIDS = list.map(_._1).toSet
-    //        val forwardedMsgs = consumeNumberMessagesFrom[MessageEnvelope](readProducerForwardTopic(conf), 3)
-    //        forwardedMsgs.map(msgEnv => assert(allUUIDS.contains(msgEnv.ubirchPacket.getUUID)))
-    //        //Attention: More comparison than same hash is never done, when making verification/ cassandra lookup
-    //
-    //        assertThrows[TimeoutException] {
-    //          consumeFirstMessageFrom[MessageEnvelope](readProducerRejectionTopic(conf))
-    //        }
-    //      }
-    //    }
-    //
-    //    "consume and trigger replayAttack warning when NOT Found if of type UPP update (hint = 250, 251, 252)" in {
-    //
-    //      val uuid1 = UUID.randomUUID()
-    //      val uuid2 = UUID.randomUUID()
-    //      val uuid3 = UUID.randomUUID()
-    //      val list = List((uuid1, "c29tZSBieXRlcyEAAQIDnw78==", 250), (uuid2, "hellohellohello", 251), (uuid3, "byebyebye", 252))
-    //
-    //      implicit val kafkaConfig: EmbeddedKafkaConfig =
-    //        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
-    //
-    //      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
-    //
-    //      def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-    //        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
-    //
-    //        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
-    //      })) {}
-    //
-    //      withRunningKafka {
-    //        val Injector = testInjector(bootstrapServers)
-    //        val conf = Injector.get[Config]
-    //
-    //        val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
-    //
-    //        msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
-    //        val consumer = Injector.get[DefaultFilterService]
-    //        consumer.consumption.startPolling()
-    //        Thread.sleep(8000)
-    //
-    //        val rejectionMsgs = consumeNumberMessagesFrom[Error](readProducerRejectionTopic(conf), 3)
-    //        rejectionMsgs.map { rejection =>
-    //          rejection.error mustBe Values.REPLAY_ATTACK_NAME
-    //          rejection.causes mustBe List(Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
-    //        }
-    //
-    //        assertThrows[TimeoutException] {
-    //          consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
-    //        }
-    //      }
-    //    }
+    "consume and forward successfully when Found if of type UPP update (hint = 250, 251, 252)" in {
+
+      val uuid1 = UUID.randomUUID()
+      val uuid2 = UUID.randomUUID()
+      val uuid3 = UUID.randomUUID()
+      val list = List((uuid1, "c29tZSBieXRlcyEAAQIDnw==", 250), (uuid2, "hellohello", 251), (uuid3, "byebye", 252))
+
+      def addToCassandra(uuid: UUID, payload: String, hint: Int): Unit = {
+        cassandra.executeScripts(
+          CqlScript.statements(
+            insertEventSql(uuid.toString, payload, hint)
+          )
+        )
+      }
+
+      list.foreach(p => addToCassandra(p._1, p._2, p._3))
+
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+
+      def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
+      })) {}
+
+      withRunningKafka {
+        val Injector = testInjector(bootstrapServers)
+        val conf = Injector.get[Config]
+
+        val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
+
+        msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
+        val consumer = Injector.get[DefaultFilterService]
+        consumer.consumption.startPolling()
+        Thread.sleep(8000)
+
+        val allUUIDS = list.map(_._1).toSet
+        val forwardedMsgs = consumeNumberMessagesFrom[MessageEnvelope](readProducerForwardTopic(conf), 3)
+        forwardedMsgs.map(msgEnv => assert(allUUIDS.contains(msgEnv.ubirchPacket.getUUID)))
+        //Attention: More comparison than same hash is never done, when making verification/ cassandra lookup
+
+        assertThrows[TimeoutException] {
+          consumeFirstMessageFrom[MessageEnvelope](readProducerRejectionTopic(conf))
+        }
+      }
+    }
+
+    "consume and trigger replayAttack warning when NOT Found if of type UPP update (hint = 250, 251, 252)" in {
+
+      val uuid1 = UUID.randomUUID()
+      val uuid2 = UUID.randomUUID()
+      val uuid3 = UUID.randomUUID()
+      val list = List((uuid1, "c29tZSBieXRlcyEAAQIDnw78==", 250), (uuid2, "hellohellohello", 251), (uuid3, "byebyebye", 252))
+
+      implicit val kafkaConfig: EmbeddedKafkaConfig =
+        EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
+
+      val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
+
+      def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
+      })) {}
+
+      withRunningKafka {
+        val Injector = testInjector(bootstrapServers)
+        val conf = Injector.get[Config]
+
+        val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
+
+        msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
+        val consumer = Injector.get[DefaultFilterService]
+        consumer.consumption.startPolling()
+        Thread.sleep(8000)
+
+        val rejectionMsgs = consumeNumberMessagesFrom[Error](readProducerRejectionTopic(conf), 3)
+        rejectionMsgs.map { rejection =>
+          rejection.error mustBe Values.REPLAY_ATTACK_NAME
+          rejection.causes mustBe List(Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
+        }
+
+        assertThrows[TimeoutException] {
+          consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
+        }
+      }
+    }
   }
 
   def insertEventSql(uuid: String = UUID.randomUUID().toString, payload: String, hint: Int = 0): String =
