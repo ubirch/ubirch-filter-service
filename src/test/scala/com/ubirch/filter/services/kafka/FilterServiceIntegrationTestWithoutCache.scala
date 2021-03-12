@@ -23,20 +23,18 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
 import com.ubirch.filter.model.Error
 import com.ubirch.filter.services.config.ConfigProvider
+import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
-import com.ubirch.protocol.ProtocolMessage
 import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.json4s.Formats
-import org.json4s.JsonAST.{JObject, JString}
 import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
 
 import java.util.concurrent.TimeoutException
-import java.util.{Base64, UUID}
 import scala.language.postfixOps
 import scala.sys.process._
 
@@ -65,9 +63,9 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
       ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-        ConfigValueFactory.fromAnyRef(bootstrapServers)
-      )
+      ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+      ConfigValueFactory.fromAnyRef(bootstrapServers)
+    )
   }
 
   /**
@@ -117,33 +115,33 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
 
       withRunningKafka {
 
-        logger.info("trying stop redis")
         try {
           redis.stop()
         } catch {
           case _: Throwable =>
         }
 
-        val msgEnvelope = generateMessageEnvelope()
+        val msgEnvelope = generateMsgEnvelope()
 
         val (_, conf) = startKafka(bootstrapServers)
 
         //publish message first time
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
-
         Thread.sleep(3000)
 
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
-
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
         cacheError1.error mustBe "RedisIOException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
+        val cacheError2 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
+        cacheError2.error mustBe "RedisIOException"
+        cacheError2.causes mustBe List("unable to add value for hash ODkzMTk= to cache.")
 
       }
     }
 
-    "not change default behaviour" in {
+    "not change default behaviour when nothing is found in cassandra" in {
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
@@ -151,28 +149,30 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
       withRunningKafka {
 
         try {
-          "fuser -k 6379/tcp" !
+          redis.stop()
         } catch {
           case _: Throwable =>
         }
 
-        val msgEnvelope = generateMessageEnvelope()
+        val msgEnvelope = generateMsgEnvelope()
         //publish message first time
         val (_, conf) = startKafka(bootstrapServers)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
         cacheError1.error mustBe "RedisIOException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
-        consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
-          msgEnvelope.ubirchPacket.getUUID
+        val cacheError2 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
+        cacheError2.error mustBe "RedisIOException"
+        cacheError2.causes mustBe List("unable to add value for hash ODkzMTk= to cache.")
+
+        val forwardedMsg1 = consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
+        forwardedMsg1.ubirchPacket.getUUID mustBe msgEnvelope.ubirchPacket.getUUID
 
         //publish message second time (replay attack)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
-        val cacheError2 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "RedisIOException"
-        cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
-
+        val forwardedMsg2 = consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
+        forwardedMsg2.ubirchPacket.getUUID mustBe msgEnvelope.ubirchPacket.getUUID
       }
     }
 
@@ -189,7 +189,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
           case _: Throwable =>
         }
 
-        val msgEnvelope1 = generateMessageEnvelope()
+        val msgEnvelope1 = generateMsgEnvelope()
 
         //publish first message
         val (_, conf) = startKafka(bootstrapServers)
@@ -204,7 +204,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         Thread.sleep(8000)
 
         //publish second message time
-        val msgEnvelope2 = generateMessageEnvelope()
+        val msgEnvelope2 = generateMsgEnvelope()
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope2)
 
         assertThrows[TimeoutException] {
@@ -213,14 +213,6 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         redis.stop()
       }
     }
-  }
-
-  private def generateMessageEnvelope(payload: Object = Base64.getEncoder.encode(UUID.randomUUID().toString.getBytes())): MessageEnvelope = {
-
-    val pm = new ProtocolMessage(1, UUID.randomUUID(), 0, payload)
-    pm.setSignature("1111".getBytes())
-    val ctxt = JObject("customerId" -> JString(UUID.randomUUID().toString))
-    MessageEnvelope(pm, ctxt)
   }
 
 }

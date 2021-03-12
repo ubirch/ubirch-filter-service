@@ -19,27 +19,23 @@ package com.ubirch.filter.services.kafka
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.model.Values.{UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE}
+import com.ubirch.filter.model._
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{Error, Values}
 import com.ubirch.filter.services.Lifecycle
+import com.ubirch.filter.util.ProtocolMessageUtils.{base64Decoder, base64Encoder, msgPackDecoder, rawPacket}
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.kafka.{MessageEnvelope, RichAnyConsumerRecord, _}
-import com.ubirch.protocol.ProtocolMessage
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
-import org.json4s.ext.JavaTypesSerializers
 import org.json4s.jackson.JsonMethods.parse
-import org.msgpack.core.MessagePack
 
-import java.io.ByteArrayOutputStream
-import java.nio.charset.StandardCharsets
-import java.util.Base64
 import java.util.concurrent.TimeoutException
 import javax.inject.{Inject, Singleton}
 import scala.collection.immutable
@@ -48,90 +44,22 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
 import scala.util.Success
 
-case class ProcessingData(cr: ConsumerRecord[String, String], upp: ProtocolMessage) {
-  def payloadHash: Array[Byte] = upp.getPayload.asText().getBytes(StandardCharsets.UTF_8)
-
-  def payloadString: String = upp.getPayload.asText()
-}
-
-trait FilterService {
-
-  /**
-    * Method that extracts the message envelope from the incoming consumer record
-    * (kafka message) and publishes and logs error messages in case of failure.
-    *
-    * @param cr The current consumer record to be checked.
-    * @return Option of message envelope if (successfully) parsed from JSON.
-    */
-  def extractData(cr: ConsumerRecord[String, String]): Option[MessageEnvelope]
-
-  /**
-    * Method that checks if the hash/payload has been processed earlier of the event-log system
-    * and publishes and logs error messages in case of failure. In case the cassandra connection is
-    * down an exception is thrown to make the underlying Kafka app wait before continuing with
-    * processing the same messages once more.
-    *
-    * @param data The data to become processed.
-    * @throws NeedForPauseException to communicate the underlying app to pause the processing
-    *                               of further messages.
-    * @return Returns the HTTP response.
-    */
-  @throws[NeedForPauseException]
-  def makeVerificationLookup(data: ProcessingData): Future[Option[String]]
-
-  /**
-    * Method that checks the cache regarding earlier processing of a message with the same
-    * hash/payload and publishes and logs error messages in case of failure.
-    *
-    * @param data The data to become processed.
-    * @return A boolean if the hash/payload has been already processed once or not.
-    */
-  def cacheContainsHash(data: ProcessingData): Future[Option[String]]
-
-  /**
-    * Method that forwards the incoming consumer record via Kafka in case no replay
-    * attack has been found and publishes and logs error messages in case of failure.
-    * In case publishing the message is failing an exception is thrown to make the underlying
-    * Kafka app wait before continuing with processing the same messages once more.
-    *
-    * @param data The data to become processed.
-    * @throws NeedForPauseException to communicate the underlying app to pause the processing
-    *                               of further messages.
-    */
-  @throws[NeedForPauseException]
-  def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]]
-
-  /**
-    * Method that reacts on a replay attack by logging and publishing a rejection message
-    * via Kafka and publishes and logs error messages in case of failure.CIn case publishing
-    * the message is failing an exception is thrown to make the underlyingCKafka app wait
-    * before continuing with processing the same messages once more.
-    *
-    * @param cr               The consumer record of the replay attack.
-    * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
-    */
-  def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
-
-  /**
-    * Method that throws an exception in case the service cannot execute it's functionality properly
-    * to make the underlying Kafka app wait with processing further messages. It also publishes and
-    * logs error messages.
-    *
-    * @param errorMessage  A message informing about the error.
-    * @param cr            The consumer record being processed while error happens.
-    * @param ex            The exception being thrown.
-    * @param mayBeDuration The duration before teh underlying Kafka app starts consuming the
-    *                      same and other messages again.
-    * @throws NeedForPauseException to communicate the underlying app to pause the processing
-    *                               of further messages.
-    */
-  @throws[NeedForPauseException]
-  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, String], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
-}
-
-object FilterService {
-  implicit val formats: Formats = com.ubirch.kafka.formats ++ JavaTypesSerializers.all
-}
+/**
+  * * This service is responsible to check incoming messages for any suspicious
+  * behaviours as for example replay attacks. Till now, this is the only check being done.
+  * It processes Kafka messages, making first a lookup in it's own cache to see if a message
+  * with the same hash/payload has been send already, if the cache is down or nothing was found,
+  * a ubirch database is questioned if the hash/payload has already been processed by the
+  * event-log. Only if no replay attack was found the message is forwarded to the event-log system.
+  *
+  * @param cache  The cache used to check if a message has already been received before.
+  * @param finder The finder used to check if a message has already been received before in the event log in case
+  *               the cache is down
+  * @param config The config file containing the configuration needed for the service
+  * @author ${user.name}
+  */
+@Singleton
+class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)
 
 abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)
   extends FilterService
@@ -173,7 +101,6 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   implicit val formats: Formats = FilterService.formats
 
-  private val msgPackConfig = new MessagePack.PackerConfig().withStr8FormatSupport(false)
   /**
     * Method that processes all consumer records of the incoming batch (Kafka message).
     */
@@ -192,22 +119,25 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         if (!filterStateActive && ubirchEnvironment != Values.PRODUCTION_NAME) {
           forwardUPP(data)
         } else {
-          cacheContainsHash(data) flatMap {
-            case Some(_) =>
-              reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
-            case None =>
-              makeVerificationLookup(data).flatMap {
-                case Some(_) =>
-                  logger.debug("Found a match in cassandra, launching reactOnReplayAttack", v("requestId", requestId), v("hardwareId", hardwareId))
-                  reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
-                case None =>
-                  logger.debug("Found no match in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
-                  forwardUPP(data)
+
+          decideReactionBasedOnCache(data).flatMap {
+            case RejectUPP => reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
+            case ForwardUPP => forwardUPP(data)
+            case InvestigateFurther =>
+
+              makeVerificationLookup(data).flatMap { foundUpp =>
+                data.pm.getHint match {
+                  case UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE =>
+                    if (foundUpp.isDefined) forwardUPP(data)
+                    else reactOnReplayAttack(cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
+                  case _ =>
+                    if (foundUpp.isEmpty) forwardUPP(data)
+                    else reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
+                }
               }
           }
         }
       }.getOrElse(Future.successful(None))
-
     }
     Future.sequence(futureResponse).map(_ => ())
 
@@ -232,10 +162,58 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
+  protected[services] def decideReactionBasedOnCache(data: ProcessingData): Future[FilterReaction] = {
+
+    cacheContainsHash(data).map {
+
+      case Some(cachedUpp: String) =>
+        val cachedHint = retrieveHintOfUpp(cachedUpp)
+        data.pm.getHint match {
+          case UPP_TYPE_DELETE =>
+            cachedHint match {
+              case UPP_TYPE_DELETE => RejectUPP
+              case _ => ForwardUPP
+            }
+          case UPP_TYPE_ENABLE =>
+            cachedHint match {
+              case UPP_TYPE_ENABLE | UPP_TYPE_DELETE => RejectUPP
+              case _ => ForwardUPP
+            }
+          case UPP_TYPE_DISABLE =>
+            cachedHint match {
+              case UPP_TYPE_DISABLE | UPP_TYPE_DELETE => RejectUPP
+              case _ => ForwardUPP
+            }
+          case _ => RejectUPP
+        }
+
+      case None =>
+        InvestigateFurther
+
+    }.recover {
+      case ex =>
+        logger.error("something went wrong checking for hint/ type of cached upp", ex)
+        InvestigateFurther
+    }
+  }
+
+  private def retrieveHintOfUpp(cachedUpp: String): Int = {
+    val byteArray = base64Decoder.decode(cachedUpp)
+    val pm = msgPackDecoder.decode(byteArray)
+    pm.getHint
+  }
+
   def makeVerificationLookup(data: ProcessingData): Future[Option[String]] = {
 
     val trimmedValue = trimPayload(data.payloadString)
-    finder.findUPP(trimmedValue).recover {
+    finder.findUPP(trimmedValue).map {
+      case Some(string) =>
+        logger.info(s"found string $string in CASSANDRA")
+        Some(string)
+      case None =>
+        logger.info("found nothing in CASSANDRA")
+        None
+    }.recover {
       case ex: TimeoutException =>
         val requestId = data.cr.requestIdHeader().orNull
         publishErrorMessage(s"cassandra timeout while verification lookup for $requestId.", data.cr, ex)
@@ -259,10 +237,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
-    cache.set(data.payloadHash, b64(rawPacket(data.upp))).recover {
-      case ex: Exception =>
-        publishErrorMessage(s"unable to add ${data.cr.requestIdHeader().orNull} to cache.", data.cr, ex)
-    }
+    addDataToCache(data)
     val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
       .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
       .recoverWith { case ex =>
@@ -276,6 +251,20 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       case _ =>
     }
     result.map { x => Some(x) }
+  }
+
+  private def addDataToCache(data: ProcessingData) = {
+    try {
+      val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
+      cache.set(data.payloadHash, base64EncodedUpp).recover {
+        case ex: Exception =>
+          publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
+      }
+    } catch {
+      case ex: NullPointerException =>
+        publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
+        Future.successful(())
+    }
   }
 
   protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = production.send(producerRecord)
@@ -316,9 +305,11 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(errorMessage: String,
-                                  cr: ConsumerRecord[String, String],
-                                  ex: Throwable): Future[Any] = {
+  private def publishErrorMessage(
+                                   errorMessage: String,
+                                   cr: ConsumerRecord[String, String],
+                                   ex: Throwable
+                                 ): Future[Any] = {
     logger.error(errorMessage, ex.getMessage, ex)
     val payload = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
     val producerRecordToSend = cr
@@ -334,40 +325,9 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
   }
 
-  private def rawPacket(upp: ProtocolMessage): Array[Byte] = {
-    val out = new ByteArrayOutputStream(255)
-    val packer = msgPackConfig.newPacker(out)
-
-    if (upp.getSigned != null) packer.writePayload(upp.getSigned)
-    packer.packBinaryHeader(upp.getSignature.length)
-    packer.writePayload(upp.getSignature)
-    packer.flush()
-    packer.close()
-
-    out.toByteArray
-  }
-
-  private def b64(x: Array[Byte]): String = if (x != null) Base64.getEncoder.encodeToString(x) else null
-
   lifecycle.addStopHook { () =>
     logger.info("Shutting down kafka")
     Future.successful(consumption.shutdown(consumerGracefulTimeout, java.util.concurrent.TimeUnit.SECONDS))
   }
 }
 
-/**
-  * * This service is responsible to check incoming messages for any suspicious
-  * behaviours as for example replay attacks. Till now, this is the only check being done.
-  * It processes Kafka messages, making first a lookup in it's own cache to see if a message
-  * with the same hash/payload has been send already, if the cache is down or nothing was found,
-  * a ubirch database is questioned if the hash/payload has already been processed by the
-  * event-log. Only if no replay attack was found the message is forwarded to the event-log system.
-  *
-  * @param cache  The cache used to check if a message has already been received before.
-  * @param finder The finder used to check if a message has already been received before in the event log in case
-  *               the cache is down
-  * @param config The config file containing the configuration needed for the service
-  * @author ${user.name}
-  */
-@Singleton
-class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)

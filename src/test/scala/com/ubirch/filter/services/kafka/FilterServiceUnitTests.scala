@@ -20,9 +20,11 @@ import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.ProducerConfPaths
-import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysException, CacheMockAlwaysFalse, CacheMockAlwaysTrue}
+import com.ubirch.filter.model._
+import com.ubirch.filter.model.cache._
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Values}
+import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
+import com.ubirch.filter.util.ProtocolMessageUtils.{base64Encoder, rawPacket}
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
@@ -93,31 +95,33 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
+
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
+
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
       val data = ProcessingData(mock[ConsumerRecord[String, String]], protocolMessage)
       fakeFilter.makeVerificationLookup(data).map(_ mustBe None)
-
-      //assert(result.code == StatusCodes.NotFound)
     }
 
     "return Some() if the finder returns not None" in {
 
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
+
         override def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinderAlwaysFound])
+
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
+
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
       val data = ProcessingData(mock[ConsumerRecord[String, String]], protocolMessage)
       fakeFilter.makeVerificationLookup(data).map(_.isDefined mustBe true)
     }
-
   }
 
   "Cache exception - when thrown - " must {
@@ -125,8 +129,10 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
     "cause a return false in cacheContainsHash()" in {
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
+
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
+
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
@@ -136,8 +142,10 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
     "not disturb the forwarding of the UPP in forwardUPP()" in {
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
+
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
+
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
@@ -151,22 +159,159 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
     "return true, when hash already has been stored to cache" in {
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
+
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
+
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.cacheContainsHash(fakeData).map(_ mustBe Some("value"))
+      fakeFilter.cacheContainsHash(fakeData).map(_ mustBe Some("lSLEEBePszd8UUFNkp7lAJKTJyEAxAU4OTMxOcRAlwXXt+1SJKEyLPJgr+se58AcNK1y8lO649xvlDQGU5qBmKUXOrZa68OHOhK38kEkEtU50zswfDW2eGokyTQNBQ=="))
     }
 
     "return false, when hash hasn't been stored to the cache yet" in {
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
+
         override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
+
       val Injector = specialInjector
       val fakeFilter = Injector.get[FakeFilterService]
       fakeFilter.cacheContainsHash(fakeData).map(_ mustBe None)
+    }
+
+  }
+
+  "cacheIndicatesReplayAttack" must {
+
+    //create default UPP
+    val defaultUPP = generateMsgEnvelope().ubirchPacket
+    val defaultAsB64 = base64Encoder.encodeToString(rawPacket(defaultUPP))
+    val defaultProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], defaultUPP)
+    //create disable UPP
+    val disableUPP = generateMsgEnvelope(hint = 250).ubirchPacket
+    val disableAsB64 = base64Encoder.encodeToString(rawPacket(disableUPP))
+    val disableProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], disableUPP)
+    //create enable UPP
+    val enableUPP = generateMsgEnvelope(hint = 251).ubirchPacket
+    val enableAsB64 = base64Encoder.encodeToString(rawPacket(enableUPP))
+    val enableProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], enableUPP)
+    //create delete UPP
+    val deleteUPP = generateMsgEnvelope(hint = 252).ubirchPacket
+    val deleteAsB64 = base64Encoder.encodeToString(rawPacket(deleteUPP))
+    val deleteProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], deleteUPP)
+
+    "return correct reaction for incoming default UPP" in {
+
+      def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
+
+        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+      })) {}
+
+      val Injector = specialInjector
+      val fakeFilter = Injector.get[FakeFilterService]
+      val cache = Injector.get[CacheStoreMock]
+
+      // default UPP returns RejectUPP, when a UPP with that hash has already been stored to the cache
+      cache.setMockUpp(Some(defaultAsB64))
+      fakeFilter.decideReactionBasedOnCache(defaultProcessingData).map(_ mustBe RejectUPP)
+
+      // default UPP returns InvestigateFurther, when no UPP with that hash has been stored to the cache yet
+      cache.setMockUpp(None)
+      fakeFilter.decideReactionBasedOnCache(defaultProcessingData).map(_ mustBe InvestigateFurther)
+    }
+
+    "return correct reaction for incoming delete UPP" in {
+
+      def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
+
+        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+      })) {}
+
+      val Injector = specialInjector
+      val fakeFilter = Injector.get[FakeFilterService]
+      val cache = Injector.get[CacheStoreMock]
+
+      // delete UPP returns RejectUPP, when delete UPP already has been stored to the cache
+      cache.setMockUpp(Some(deleteAsB64))
+      fakeFilter.decideReactionBasedOnCache(deleteProcessingData).map(_ mustBe RejectUPP)
+
+      // delete UPP returns ForwardUPP, when another UPP than delete has been stored to the cache already
+      cache.setMockUpp(Some(defaultAsB64))
+      fakeFilter.decideReactionBasedOnCache(deleteProcessingData).map(_ mustBe ForwardUPP)
+
+      // delete UPP returns InvestigateFurther, when no UPP with that hash has been stored to the cache yet
+      cache.setMockUpp(None)
+      fakeFilter.decideReactionBasedOnCache(deleteProcessingData).map(_ mustBe InvestigateFurther)
+    }
+
+    "return correct reaction for incoming enable UPP" in {
+
+      def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
+
+        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+      })) {}
+
+      val Injector = specialInjector
+      val fakeFilter = Injector.get[FakeFilterService]
+      val cache = Injector.get[CacheStoreMock]
+
+      // enable UPP returns  RejectUPP, when enable UPP has been stored to the cache already
+      cache.setMockUpp(Some(enableAsB64))
+      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe RejectUPP)
+
+      // enable UPP returns RejectUPP, when delete UPP has been stored to the cache already
+      cache.setMockUpp(Some(deleteAsB64))
+      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe RejectUPP)
+
+      // enable UPP returns ForwardUPP, when another UPP than enable or delete has been stored to the cache already
+      cache.setMockUpp(Some(defaultAsB64))
+      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe ForwardUPP)
+
+      // enable UPP returns ForwardUPP, when another UPP than enable or delete has been stored to the cache already
+      cache.setMockUpp(Some(disableAsB64))
+      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe ForwardUPP)
+
+      //enable UPP returns InvestigateFurther, when no UPP with that hash has been stored to the cache yet
+      cache.setMockUpp(None)
+      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe InvestigateFurther)
+    }
+
+    "return correct reaction for incoming disable UPP" in {
+
+      def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
+
+        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+      })) {}
+
+      val Injector = specialInjector
+      val fakeFilter = Injector.get[FakeFilterService]
+      val cache = Injector.get[CacheStoreMock]
+
+      // disable UUP returns RejectUPP, when disable UPP has not been stored to the cache already
+      cache.setMockUpp(Some(disableAsB64))
+      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe RejectUPP)
+
+      // disable UUP returns RejectUPP, when delete UPP has not been stored to the cache already
+      cache.setMockUpp(Some(deleteAsB64))
+      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe RejectUPP)
+
+      // disable UUP returns ForwardUPP, when another UPP than disable or delete has been stored to the cache already
+      cache.setMockUpp(Some(defaultAsB64))
+      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe ForwardUPP)
+
+      // disable UUP returns ForwardUPP, when another UPP than disable or delete has been stored to the cache already
+      cache.setMockUpp(Some(enableAsB64))
+      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe ForwardUPP)
+
+      //disable UPP returns InvestigateFurther, when no UPP with that hash has been stored to the cache yet
+      cache.setMockUpp(None)
+      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe InvestigateFurther)
     }
 
   }

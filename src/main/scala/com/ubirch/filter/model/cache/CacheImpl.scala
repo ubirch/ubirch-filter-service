@@ -6,11 +6,11 @@ import com.ubirch.filter.ConfPaths.RedisConfPaths._
 import com.ubirch.filter.services.Lifecycle
 import monix.execution.Scheduler
 import scredis.Redis
+import scredis.exceptions.RedisIOException
 import scredis.protocol.AuthConfig
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
 
 @Singleton
 class CacheImpl @Inject()(config: Config, lifecycle: Lifecycle)
@@ -18,56 +18,45 @@ class CacheImpl @Inject()(config: Config, lifecycle: Lifecycle)
 
   private val host = config.getString(REDIS_MAIN_HOST)
   private val port = config.getInt(REDIS_PORT)
+  private val index = config.getInt(REDIS_INDEX)
+  private val cacheTTL = config.getInt(REDIS_CACHE_TTL)
+
   private val password: String = config.getString(REDIS_PASSWORD)
   private val authOpt =
     if (password == "") None
     else Some(AuthConfig(None, password))
-  private val index = config.getInt(REDIS_INDEX)
 
-  private val cacheTTL = config.getInt(REDIS_CACHE_TTL)
-  private var redis: Redis = _
-
-  private val initialDelay = 1.seconds
-  private val repeatingDelay = 2.seconds
-
-  private val c = scheduler.scheduleAtFixedRate(initialDelay, repeatingDelay) {
-    try {
-      redis = Redis(host, port, authOpt, index)
-      stopConnecting()
-      logger.info("connection to redis cache has been established.")
-    } catch {
-      case ex: Exception =>
-        logger.error("redis error: not able to create connection: ", ex.getMessage, ex)
-    }
-  }
-
-  private def stopConnecting(): Unit = {
-    c.cancel()
-  }
+  /**
+    * This redis instance doesn't connect yet. On the first access
+    * a connection will be tried to become established. After that
+    * the instance keeps the connection open until a certain timeout
+    * is reached. (Haven't found the exact number yet.) For further
+    * configurations look here:
+    * https://github.com/scredis/scredis/blob/master/src/main/resources/reference.conf
+    */
+  private val redis: Redis = Redis(host, port, authOpt, index)
 
   /**
     * Checks if the hash/payload already is stored in the cache.
     *
     * @param hash key
-    * @return value to the key, null if key doesn't exist yet
+    * @return optional value
     */
-  @throws[NoCacheConnectionException]
+  @throws[RedisIOException]
   def get(hash: Array[Byte]): Future[Option[String]] = {
-    if (redis == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
     redis.get(new String(hash))
   }
 
   /**
-    * Sets a new key value pair to the cache.
+    * Sets a new key value pair to the cache or overwrites an
+    * old one.
     *
     * @param hash key
-    * @return previous associated value for this key or null if
-    *         key is set for the first time
+    * @param upp  value
     */
-  @throws[NoCacheConnectionException]
+  @throws[RedisIOException]
   def set(hash: Array[Byte], upp: String): Future[Unit] = {
-    if (redis == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
-    else redis.setEX(new String(hash), upp, cacheTTL * 60)
+    redis.setEX(new String(hash), upp, cacheTTL * 60)
   }
 
   lifecycle.addStopHook { () =>
