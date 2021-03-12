@@ -305,11 +305,9 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(
-                                   errorMessage: String,
-                                   cr: ConsumerRecord[String, String],
-                                   ex: Throwable
-                                 ): Future[Any] = {
+  private def publishErrorMessage(errorMessage: String,
+                                  cr: ConsumerRecord[String, String],
+                                  ex: Throwable): Future[Any] = {
     logger.error(errorMessage, ex.getMessage, ex)
     val payload = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
     val producerRecordToSend = cr
