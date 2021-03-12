@@ -24,7 +24,7 @@
     <artifactId>filter-service</artifactId>
     <version>1.0</version>
     <name>${project.artifactId}</name>
-    <description>an app to filter upp in case of replay attack or other attacks</description>
+    <description>an app to filter upp in case of replay attack and to prevent duplications</description>
     <packaging>jar</packaging>
     <inceptionYear>2019</inceptionYear>
 

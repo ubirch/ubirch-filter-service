@@ -8,7 +8,7 @@ import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
 import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysFalse}
 import com.ubirch.filter.model.{Error, Values}
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.util.MessageEnvelopeGenerator.generateMsgEnvelope
+import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
@@ -60,7 +60,6 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
     stopCassandra()
   }
 
-
   /**
     * Called after all tests. Not working always unfortunately.
     */
@@ -83,7 +82,6 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
     }
     logger.info(s"Embedded kafka status: isRunning = ${EmbeddedKafka.isRunning}")
   }
-
 
   "Cassandra lookup" must {
 
@@ -205,10 +203,10 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
         val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
 
         msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
-        Thread.sleep(1000)
+        Thread.sleep(4000)
         val consumer = Injector.get[DefaultFilterService]
         consumer.consumption.startPolling()
-        Thread.sleep(1000)
+        Thread.sleep(4000)
 
         val allUUIDS = list.map(_._1).toSet
         val forwardedMsgs = consumeNumberMessagesFrom[MessageEnvelope](readProducerForwardTopic(conf), 3)
@@ -220,7 +218,6 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
         }
       }
     }
-
 
     "consume and trigger replayAttack warning when NOT Found if of type UPP update (hint = 250, 251, 252)" in {
 
@@ -247,13 +244,13 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
         val msgEnvelopes = list.map(p => generateMsgEnvelope(uuid = p._1, payload = p._2, hint = p._3))
 
         msgEnvelopes.foreach(e => publishToKafka(readConsumerTopicHead(conf), e))
-        Thread.sleep(1000)
+        Thread.sleep(30000)
         val consumer = Injector.get[DefaultFilterService]
         consumer.consumption.startPolling()
-        Thread.sleep(1000)
+        Thread.sleep(30000)
 
-        val forwardedMsgs = consumeNumberMessagesFrom[Error](readProducerRejectionTopic(conf), 3)
-        forwardedMsgs.map { rejection =>
+        val rejectionMsgs = consumeNumberMessagesFrom[Error](readProducerRejectionTopic(conf), 3)
+        rejectionMsgs.map { rejection =>
           rejection.error mustBe Values.REPLAY_ATTACK_NAME
           rejection.causes mustBe List(Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
         }
@@ -263,9 +260,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
         }
       }
     }
-
   }
-
 
   def insertEventSql(uuid: String = UUID.randomUUID().toString, payload: String, hint: Int = 0): String =
     s"""

@@ -21,11 +21,11 @@ import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
-import com.ubirch.filter.model.cache.{Cache, CacheStoreMock, CustomCache}
+import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysTrue, CustomCache}
 import com.ubirch.filter.model.eventlog.Finder
-import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Error, Values}
+import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Error, ProcessingData, Values}
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.util.MessageEnvelopeGenerator.generateMsgEnvelope
+import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
@@ -198,7 +198,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
 
         val consumer: DefaultFilterService = Injector.get[DefaultFilterService]
         consumer.consumption.startPolling()
-        Thread.sleep(1000)
+        Thread.sleep(3000)
 
         val message: Error = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
         message.microservice mustBe "filter-service"
@@ -282,7 +282,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
 
         val filter = Injector.get[AbstractFilterService]
         filter.consumption.startPolling()
-
+        Thread.sleep(3000)
         val msgEnvelope = generateMsgEnvelope()
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
@@ -317,7 +317,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
           )
         })
 
-        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
       })) {}
 
       withRunningKafka {
@@ -328,7 +328,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
         filter.consumption.startPolling()
         val msgEnvelope = generateMsgEnvelope()
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
-        Thread.sleep(1000)
+        Thread.sleep(2000)
         val rejection = consumeFirstMessageFrom[Error](readProducerRejectionTopic(conf))
         rejection.causes mustBe List(Values.FOUND_IN_CACHE_MESSAGE)
         rejection.error mustBe Values.REPLAY_ATTACK_NAME

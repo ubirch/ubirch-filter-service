@@ -1,4 +1,4 @@
-package com.ubirch.filter.util
+package com.ubirch.filter.testUtils
 
 import com.typesafe.scalalogging.StrictLogging
 import com.ubirch.crypto.GeneratorKeyFactory

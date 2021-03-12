@@ -16,7 +16,8 @@
 
 package com.ubirch.filter.model.cache
 
-import com.ubirch.filter.util.MessageEnvelopeGenerator.{b64, generateMsgEnvelope, rawPacket}
+import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
+import com.ubirch.filter.util.ProtocolMessageUtils.{base64Encoder, rawPacket}
 
 import java.util.UUID
 import java.util.concurrent.TimeoutException
@@ -44,7 +45,7 @@ class CacheMockAlwaysFalse extends Cache {
 class CacheMockAlwaysTrue extends Cache {
 
   private val msgEnv = generateMsgEnvelope(uuid = UUID.fromString("178fb337-7c51-414d-929e-e50092932721"))
-  private val b64Env = b64(rawPacket(msgEnv.ubirchPacket))
+  private val b64Env = base64Encoder.encodeToString(rawPacket(msgEnv.ubirchPacket))
 
   def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(Some(b64Env))
 
@@ -64,7 +65,6 @@ class CacheStoreMock extends Cache {
 
   def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
 }
-
 
 /**
   * just a cache variable that records what messages are being processed by the filter service

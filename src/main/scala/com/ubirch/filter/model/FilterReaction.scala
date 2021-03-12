@@ -1,4 +1,4 @@
-package com.ubirch.filter.services.kafka
+package com.ubirch.filter.model
 
 sealed trait FilterReaction
 

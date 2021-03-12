@@ -23,7 +23,7 @@ import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
 import com.ubirch.filter.model.Error
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.util.MessageEnvelopeGenerator.generateMsgEnvelope
+import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
