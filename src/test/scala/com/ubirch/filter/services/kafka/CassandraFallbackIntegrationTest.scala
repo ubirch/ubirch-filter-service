@@ -59,7 +59,6 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
     stopCassandra()
   }
 
-
   override protected def beforeEach(): Unit = {
     EmbeddedKafka.start()
     CollectorRegistry.defaultRegistry.clear()
@@ -163,16 +162,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val uuid3 = UUID.randomUUID()
       val list = List((uuid1, "c29tZSBieXRlcyEAAQIDnw==", 250), (uuid2, "hellohello", 251), (uuid3, "byebye", 252))
 
-      def addToCassandra(uuid: UUID, payload: String, hint: Int): Unit = {
-        cassandra.executeScripts(
-          CqlScript.statements(
-            insertEventSql(uuid.toString, payload, hint)
-          )
-        )
-      }
-
       list.foreach(p => addToCassandra(p._1, p._2, p._3))
-
+      Thread.sleep(4000) // wait for elements being added to cassandra
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
 
@@ -246,6 +237,14 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
         }
       }
     }
+  }
+
+  def addToCassandra(uuid: UUID, payload: String, hint: Int): Unit = {
+    cassandra.executeScripts(
+      CqlScript.statements(
+        insertEventSql(uuid.toString, payload, hint)
+      )
+    )
   }
 
   def insertEventSql(uuid: String = UUID.randomUUID().toString, payload: String, hint: Int = 0): String =
