@@ -160,10 +160,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val uuid1 = UUID.randomUUID()
       val uuid2 = UUID.randomUUID()
       val uuid3 = UUID.randomUUID()
-      val list = List((uuid1, "c29tZSBieXRlcyEAAQIDnw==", 250), (uuid2, "hellohello", 251), (uuid3, "byebye", 252))
+      val list = List((uuid1, "c29tZSBieXRlcyEXXAAQIDnw==", 250), (uuid2, "helloNohello", 251), (uuid3, "byeNobye", 252))
 
-      list.foreach(p => addToCassandra(p._1, p._2, p._3))
-      Thread.sleep(4000) // wait for elements being added to cassandra
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
 
@@ -176,6 +174,9 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       })) {}
 
       withRunningKafka {
+        list.foreach(p => addToCassandra(p._1, p._2, p._3))
+        Thread.sleep(10000) // wait for elements being added to cassandra
+
         val Injector = testInjector(bootstrapServers)
         val conf = Injector.get[Config]
 
