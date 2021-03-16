@@ -36,7 +36,7 @@ class CacheMockAlwaysException extends Cache {
 
   def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.failed(new TimeoutException())
 
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = Future.successful(true)
 }
 
 class CacheMockAlwaysFalse extends Cache {
@@ -47,7 +47,7 @@ class CacheMockAlwaysFalse extends Cache {
 
   def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = Future.successful(true)
 }
 
 class CacheMockAlwaysTrue extends Cache {
@@ -61,7 +61,7 @@ class CacheMockAlwaysTrue extends Cache {
 
   def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = Future.successful(true)
 }
 
 @Singleton
@@ -79,7 +79,7 @@ class CacheStoreMock extends Cache {
 
   def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = Future.successful(true)
 }
 
 /**
@@ -98,7 +98,7 @@ class CustomCache extends Cache {
 
   def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = Future.successful(true)
 }
 
 /**
@@ -107,8 +107,8 @@ class CustomCache extends Cache {
 @Singleton
 class VerificationInspectCache extends Cache {
 
-  var verifyList = Map[String, String]()
-  var filterList = Map[String, String]()
+  private var verifyList = Map[String, String]()
+  private var filterList = Map[String, String]()
 
   def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] =
     Future.successful(filterList.get(new String(hash)))
@@ -123,7 +123,7 @@ class VerificationInspectCache extends Cache {
     Future.successful(None)
   }
 
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = Future.successful(true)
 
   def getFromVerificationCache(hash: Array[Byte]): Option[String] = verifyList.get(new String(hash))
 }

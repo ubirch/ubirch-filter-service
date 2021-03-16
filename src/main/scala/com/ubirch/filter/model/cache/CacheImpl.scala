@@ -161,10 +161,10 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
     *         key is set for the first time
     */
   @throws[NoCacheConnectionException]
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit = {
-    if (verifyCache == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = {
+    if (verifyCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
     else {
-      verifyCache.fastRemove(hash)
+      Future.successful(verifyCache.fastRemove(hash) == 1)
     }
   }
 

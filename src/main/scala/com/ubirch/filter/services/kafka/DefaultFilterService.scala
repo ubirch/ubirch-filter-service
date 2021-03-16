@@ -228,7 +228,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param payload the payload to (eventually) trim
     * @return a trimmed string on which the first and last char will not be "
     */
-  private def trimPayload(payload: String) = {
+  private def trimPayload(payload: String): String = {
     if (payload.length > 2) {
       if (payload.head == '\"' && payload.endsWith("\"")) {
         payload.substring(1, payload.length - 1)
@@ -260,13 +260,15 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     result.map { x => Some(x) }
   }
 
-  private def addToVerificationCache(data: ProcessingData) = {
+  private def addToVerificationCache(data: ProcessingData): Future[Any] = {
     try {
       val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
-      cache.setToVerificationCache(data.payloadHash, base64EncodedUpp).recover {
-        case ex: Exception =>
-          publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
-      }
+      cache
+        .setToVerificationCache(data.payloadHash, base64EncodedUpp)
+        .recoverWith {
+          case ex: Exception =>
+            publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
+        }
     } catch {
       case ex: NullPointerException =>
         publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
@@ -274,7 +276,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
-  private def addToFilterCache(data: ProcessingData) = {
+  private def addToFilterCache(data: ProcessingData): Future[Any] = {
     try {
       val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
       cache.setToFilterCache(data.payloadHash, base64EncodedUpp).recover {
@@ -288,13 +290,14 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
-  private def deleteFromVerificationCache(data: ProcessingData) = {
-    try {
-      cache.deleteFromVerificationCache(data.payloadHash)
-    } catch {
-      case ex: Exception =>
-        publishErrorMessage(s"unable to delete upp by hash ${data.payloadString} from cache.", data.cr, ex)
-    }
+  private def deleteFromVerificationCache(data: ProcessingData): Future[Boolean] = {
+    cache
+      .deleteFromVerificationCache(data.payloadHash)
+      .recover {
+        case ex: Exception =>
+          publishErrorMessage(s"unable to delete upp by hash ${data.payloadString} from cache.", data.cr, ex)
+          false
+      }
   }
 
   protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = production.send(producerRecord)

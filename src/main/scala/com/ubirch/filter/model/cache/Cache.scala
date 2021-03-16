@@ -33,6 +33,6 @@ trait Cache {
   def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]]
 
   @throws[Exception]
-  def deleteFromVerificationCache(hash: Array[Byte]): Unit
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean]
 }
 
