@@ -32,14 +32,14 @@ class CacheMockAlwaysException extends Cache {
 
   def get(hash: Array[Byte]): Future[Option[String]] = Future.failed(new TimeoutException())
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.failed(new TimeoutException())
+  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.failed(new TimeoutException())
 }
 
 class CacheMockAlwaysFalse extends Cache {
 
   def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(None)
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
+  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 }
 
 class CacheMockAlwaysTrue extends Cache {
@@ -49,7 +49,7 @@ class CacheMockAlwaysTrue extends Cache {
 
   def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(Some(b64Env))
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
+  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 }
 
 @Singleton
@@ -63,7 +63,7 @@ class CacheStoreMock extends Cache {
     mockedUPP = upp
   }
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
+  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 }
 
 /**
@@ -78,7 +78,7 @@ class CustomCache extends Cache {
     Future.successful(None)
   }
 
-  def set(hash: Array[Byte], upp: String): Future[Unit] = Future.successful(())
+  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 
 }
 

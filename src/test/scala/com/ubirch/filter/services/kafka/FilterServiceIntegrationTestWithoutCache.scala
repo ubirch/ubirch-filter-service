@@ -132,10 +132,10 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope.ubirchPacket.getUUID
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "RedisIOException"
+        cacheError1.error mustBe "NoCacheConnectionException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
         val cacheError2 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError2.error mustBe "RedisIOException"
+        cacheError2.error mustBe "NoCacheConnectionException"
         cacheError2.causes mustBe List("unable to add value for hash ODkzMTk= to cache.")
 
       }
@@ -159,10 +159,10 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         val (_, conf) = startKafka(bootstrapServers)
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "RedisIOException"
+        cacheError1.error mustBe "NoCacheConnectionException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
         val cacheError2 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError2.error mustBe "RedisIOException"
+        cacheError2.error mustBe "NoCacheConnectionException"
         cacheError2.causes mustBe List("unable to add value for hash ODkzMTk= to cache.")
 
         val forwardedMsg1 = consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
@@ -197,7 +197,7 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope1.ubirchPacket.getUUID
         val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "RedisIOException"
+        cacheError1.error mustBe "NoCacheConnectionException"
         cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
         redis = new RedisServer(6379)
         redis.start()
