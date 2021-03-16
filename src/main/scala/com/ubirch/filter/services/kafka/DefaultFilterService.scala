@@ -238,26 +238,34 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
 
-    addToFilterCache(data)
+    val result1 = addToFilterCache(data)
 
-    if (data.pm.getHint == UPP_TYPE_DELETE || data.pm.getHint == UPP_TYPE_DISABLE)
+    val result2 = if (data.pm.getHint == UPP_TYPE_DELETE || data.pm.getHint == UPP_TYPE_DISABLE)
       deleteFromVerificationCache(data)
     else if (data.pm.getHint != UPP_TYPE_ENABLE)
       addToVerificationCache(data)
+    else Future.successful(())
 
-    val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
+    val result3 = send(data.cr.toProducerRecord(topic = producerForwardTopic))
       .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
       .recoverWith { case ex =>
         pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, FiniteDuration(2, SECONDS))
       }
-    result.onComplete {
+    result3.onComplete {
       case Success(_) =>
         val hardwareId = data.cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
         val requestId = data.cr.requestIdHeader().orNull
         logger.info(s"Successfully forwarded msg from $hardwareId with requestId: $requestId", v("requestId", requestId), v("hardwareId", hardwareId))
       case _ =>
     }
-    result.map { x => Some(x) }
+
+    for {
+      _ <- result1
+      _ <- result2
+      recordMetaData <- result3
+    } yield {
+      Some(recordMetaData)
+    }
   }
 
   private def addToVerificationCache(data: ProcessingData): Future[Any] = {
@@ -319,16 +327,22 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
-    addToFilterCache(data)
+    val result1 = addToFilterCache(data)
     val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
     val requestId = cr.requestIdHeader().orNull
     logger.warn(s"UPP/Hash already known for hardwareId: $hardwareId and requestId: $requestId message=$rejectionMessage", v("requestId", requestId), v("hardwareId", hardwareId))
     val producerRecordToSend = generateReplayAttackProducerRecord(cr, rejectionMessage)
-    send(producerRecordToSend)
+    val result2 = send(producerRecordToSend)
       .recoverWith { case _ => send(producerRecordToSend) }
       .recoverWith { case ex: Exception =>
         pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, FiniteDuration(2, SECONDS))
-      }.map { x => Some(x) }
+      }
+    for {
+      _ <- result1
+      recordMetaData <- result2
+    } yield {
+      Some(recordMetaData)
+    }
   }
 
   /**
