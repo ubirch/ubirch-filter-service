@@ -21,11 +21,12 @@ import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{Config, ConfigValueFactory}
 import com.typesafe.scalalogging.LazyLogging
 import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
-import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysTrue, CustomCache}
+import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysTrue, CustomCache, VerificationInspectCache}
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.model.{CassandraFinderAlwaysFound, Error, ProcessingData, Values}
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
+import com.ubirch.filter.util.ProtocolMessageUtils.{base64Encoder, rawPacket}
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
@@ -37,6 +38,7 @@ import org.json4s.Formats
 import org.scalatest._
 import redis.embedded.RedisServer
 
+import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.concurrent.TimeoutException
 import scala.concurrent.duration.DurationInt
@@ -255,7 +257,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       }
     }
 
-    "forward all messages when activeState equals false" in {
+    "forward all messages when activeState equals false and add to verification cache" in {
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
@@ -273,21 +275,28 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
             ConfigValueFactory.fromAnyRef(false)
           )
         })
+
+        override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[VerificationInspectCache])
+
       })) {}
 
       withRunningKafka {
 
         val Injector = FakeInjector(bootstrapServers)
         val conf = Injector.get[Config]
-
+        val cache = Injector.get[Cache].asInstanceOf[VerificationInspectCache]
         val filter = Injector.get[AbstractFilterService]
         filter.consumption.startPolling()
         Thread.sleep(3000)
         val msgEnvelope = generateMsgEnvelope()
+        val pm = msgEnvelope.ubirchPacket
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope)
 
         val forwardedMessage = consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf))
         forwardedMessage.ubirchPacket.getUUID mustEqual msgEnvelope.ubirchPacket.getUUID
+        val r = cache.getFromVerificationCache(pm.getPayload.asText().getBytes(StandardCharsets.UTF_8))
+        val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(pm))
+        r mustBe Some(base64EncodedUpp)
       }
     }
 

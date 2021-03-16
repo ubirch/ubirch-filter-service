@@ -196,9 +196,10 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
         publishToKafka(readConsumerTopicHead(conf), msgEnvelope1)
         consumeFirstMessageFrom[MessageEnvelope](readProducerForwardTopic(conf)).ubirchPacket.getUUID mustBe
           msgEnvelope1.ubirchPacket.getUUID
-        val cacheError1 = consumeFirstMessageFrom[Error](readProducerErrorTopic(conf))
-        cacheError1.error mustBe "NoCacheConnectionException"
-        cacheError1.causes mustBe List("unable to make cache lookup 'null'.")
+        val cacheError = consumeNumberMessagesFrom[Error](readProducerErrorTopic(conf), 2)
+        cacheError.head.error mustBe "NoCacheConnectionException"
+        cacheError.head.causes mustBe List("unable to make cache lookup 'null'.")
+
         redis = new RedisServer(6379)
         redis.start()
         Thread.sleep(8000)

@@ -27,7 +27,8 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
   private val password: String = config.getString(REDIS_PASSWORD)
   private val evaluatedPW = if (password == "") null else password
   private val useReplicated: Boolean = config.getBoolean(REDIS_USE_REPLICATED)
-  private val cacheName: String = config.getString(REDIS_CACHE_NAME)
+  private val filterCacheName: String = config.getString(REDIS_FILTER_CACHE_NAME)
+  private val verifyCacheName: String = config.getString(REDIS_VERIFY_CACHE_NAME)
   private val cacheTTL: Long = config.getLong(REDIS_CACHE_TTL)
   val redisConf = new org.redisson.config.Config()
   private val prefix = "redis://"
@@ -45,7 +46,8 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
   }
 
   private var redisson: RedissonClient = _
-  private var cache: RMapCache[Array[Byte], String] = _
+  private var verifyCache: RMapCache[Array[Byte], String] = _
+  private var filterCache: RMapCache[Array[Byte], String] = _
 
   private val initialDelay = 1.seconds
   private val repeatingDelay = 2.second
@@ -56,7 +58,8 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
   private val c = scheduler.scheduleAtFixedRate(initialDelay, repeatingDelay) {
     try {
       redisson = Redisson.create(redisConf)
-      cache = redisson.getMapCache[Array[Byte], String](cacheName)
+      verifyCache = redisson.getMapCache[Array[Byte], String](verifyCacheName)
+      filterCache = redisson.getMapCache[Array[Byte], String](filterCacheName)
       stopConnecting()
       logger.info("connection to redis cache has been established.")
     } catch {
@@ -81,8 +84,8 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
     * @return value to the key, null if key doesn't exist yet
     */
   @throws[NoCacheConnectionException]
-  def get(hash: Array[Byte]): Future[Option[String]] = {
-    if (cache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] = {
+    if (filterCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
     else {
       val p = Promise[Option[String]]()
 
@@ -95,7 +98,7 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
         }
       }
 
-      cache.getAsync(hash).onComplete(listener)
+      filterCache.getAsync(hash).onComplete(listener)
       p.future
     }
   }
@@ -108,8 +111,8 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
     *         key is set for the first time
     */
   @throws[NoCacheConnectionException]
-  def set(hash: Array[Byte], upp: String): Future[Option[String]] = {
-    if (cache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = {
+    if (filterCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
     else {
       val p = Promise[Option[String]]()
       val listener = new BiConsumer[String, Throwable] {
@@ -120,13 +123,53 @@ class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit schedul
             p.success(Option(t))
         }
       }
-      cache.putAsync(hash, upp, cacheTTL, TimeUnit.MINUTES).onComplete(listener)
+      filterCache.putAsync(hash, upp, cacheTTL, TimeUnit.MINUTES).onComplete(listener)
       p.future
     }
   }
 
+  /**
+    * Sets a new key value pair to the cache.
+    *
+    * @param hash key
+    * @return previous associated value for this key or null if
+    *         key is set for the first time
+    */
+  @throws[NoCacheConnectionException]
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = {
+    if (verifyCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    else {
+      val p = Promise[Option[String]]()
+      val listener = new BiConsumer[String, Throwable] {
+        override def accept(t: String, u: Throwable): Unit = {
+          if (u != null)
+            p.failure(u)
+          else
+            p.success(Option(t))
+        }
+      }
+      verifyCache.putAsync(hash, upp, cacheTTL, TimeUnit.MINUTES).onComplete(listener)
+      p.future
+    }
+  }
+
+  /**
+    * Sets a new key value pair to the cache.
+    *
+    * @param hash key
+    * @return previous associated value for this key or null if
+    *         key is set for the first time
+    */
+  @throws[NoCacheConnectionException]
+  def deleteFromVerificationCache(hash: Array[Byte]): Unit = {
+    if (verifyCache == null) throw NoCacheConnectionException("redis error - a connection could not become established yet")
+    else {
+      verifyCache.fastRemove(hash)
+    }
+  }
+
   lifecycle.addStopHook { () =>
-    logger.info("Shutting down Redis: " + cacheName)
+    logger.info("Shutting down Redis: " + filterCacheName + " and " + verifyCacheName)
     Future.successful(redisson.shutdown())
   }
 

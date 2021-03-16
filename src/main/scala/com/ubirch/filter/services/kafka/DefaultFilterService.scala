@@ -121,7 +121,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         } else {
 
           decideReactionBasedOnCache(data).flatMap {
-            case RejectUPP => reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
+            case RejectUPP => reactOnReplayAttack(data, cr, Values.FOUND_IN_CACHE_MESSAGE)
             case ForwardUPP => forwardUPP(data)
             case InvestigateFurther =>
 
@@ -129,10 +129,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
                 data.pm.getHint match {
                   case UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE =>
                     if (foundUpp.isDefined) forwardUPP(data)
-                    else reactOnReplayAttack(cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
+                    else reactOnReplayAttack(data, cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
                   case _ =>
                     if (foundUpp.isEmpty) forwardUPP(data)
-                    else reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
+                    else reactOnReplayAttack(data, cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
                 }
               }
           }
@@ -154,8 +154,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
-  def cacheContainsHash(data: ProcessingData): Future[Option[String]] = {
-    cache.get(data.payloadHash).recover {
+  def filterCacheContains(data: ProcessingData): Future[Option[String]] = {
+    cache.getFromFilterCache(data.payloadHash).recover {
       case ex: Exception =>
         publishErrorMessage(s"unable to make cache lookup '${data.cr.requestIdHeader().orNull}'.", data.cr, ex)
         None
@@ -164,7 +164,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   protected[services] def decideReactionBasedOnCache(data: ProcessingData): Future[FilterReaction] = {
 
-    cacheContainsHash(data).map {
+    filterCacheContains(data).map {
 
       case Some(cachedUpp: String) =>
         val cachedHint = retrieveHintOfUpp(cachedUpp)
@@ -237,7 +237,14 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
-    addDataToCache(data)
+
+    addToFilterCache(data)
+
+    if (data.pm.getHint == UPP_TYPE_DELETE || data.pm.getHint == UPP_TYPE_DISABLE)
+      deleteFromVerificationCache(data)
+    else if (data.pm.getHint != UPP_TYPE_ENABLE)
+      addToVerificationCache(data)
+
     val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
       .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
       .recoverWith { case ex =>
@@ -253,10 +260,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     result.map { x => Some(x) }
   }
 
-  private def addDataToCache(data: ProcessingData) = {
+  private def addToVerificationCache(data: ProcessingData) = {
     try {
       val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
-      cache.set(data.payloadHash, base64EncodedUpp).recover {
+      cache.setToVerificationCache(data.payloadHash, base64EncodedUpp).recover {
         case ex: Exception =>
           publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
       }
@@ -264,6 +271,29 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       case ex: NullPointerException =>
         publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
         Future.successful(())
+    }
+  }
+
+  private def addToFilterCache(data: ProcessingData) = {
+    try {
+      val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
+      cache.setToFilterCache(data.payloadHash, base64EncodedUpp).recover {
+        case ex: Exception =>
+          publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
+      }
+    } catch {
+      case ex: NullPointerException =>
+        publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
+        Future.successful(())
+    }
+  }
+
+  private def deleteFromVerificationCache(data: ProcessingData) = {
+    try {
+      cache.deleteFromVerificationCache(data.payloadHash)
+    } catch {
+      case ex: Exception =>
+        publishErrorMessage(s"unable to delete upp by hash ${data.payloadString} from cache.", data.cr, ex)
     }
   }
 
@@ -285,11 +315,12 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       )
   }
 
-  def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+    addToFilterCache(data)
     val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
     val requestId = cr.requestIdHeader().orNull
     logger.warn(s"UPP/Hash already known for hardwareId: $hardwareId and requestId: $requestId message=$rejectionMessage", v("requestId", requestId), v("hardwareId", hardwareId))
-    val producerRecordToSend: ProducerRecord[String, String] = generateReplayAttackProducerRecord(cr, rejectionMessage)
+    val producerRecordToSend = generateReplayAttackProducerRecord(cr, rejectionMessage)
     send(producerRecordToSend)
       .recoverWith { case _ => send(producerRecordToSend) }
       .recoverWith { case ex: Exception =>

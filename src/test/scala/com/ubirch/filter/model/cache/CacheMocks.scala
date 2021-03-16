@@ -30,16 +30,24 @@ import scala.concurrent.Future
 
 class CacheMockAlwaysException extends Cache {
 
-  def get(hash: Array[Byte]): Future[Option[String]] = Future.failed(new TimeoutException())
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] = Future.failed(new TimeoutException())
 
-  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.failed(new TimeoutException())
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.failed(new TimeoutException())
+
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.failed(new TimeoutException())
+
+  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
 }
 
 class CacheMockAlwaysFalse extends Cache {
 
-  def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(None)
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] = Future.successful(None)
 
-  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+
+  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
 }
 
 class CacheMockAlwaysTrue extends Cache {
@@ -47,9 +55,13 @@ class CacheMockAlwaysTrue extends Cache {
   private val msgEnv = generateMsgEnvelope(uuid = UUID.fromString("178fb337-7c51-414d-929e-e50092932721"))
   private val b64Env = base64Encoder.encodeToString(rawPacket(msgEnv.ubirchPacket))
 
-  def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(Some(b64Env))
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] = Future.successful(Some(b64Env))
 
-  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+
+  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
 }
 
 @Singleton
@@ -57,13 +69,17 @@ class CacheStoreMock extends Cache {
 
   private var mockedUPP: Option[String] = None
 
-  def get(hash: Array[Byte]): Future[Option[String]] = Future.successful(mockedUPP)
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] = Future.successful(mockedUPP)
 
   def setMockUpp(upp: Option[String]): Unit = {
     mockedUPP = upp
   }
 
-  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+
+  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
 }
 
 /**
@@ -73,12 +89,41 @@ class CacheStoreMock extends Cache {
 class CustomCache extends Cache {
   var list: List[Array[Byte]] = List[Array[Byte]]()
 
-  def get(hash: Array[Byte]): Future[Option[String]] = {
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] = {
     list = list :+ hash
     Future.successful(None)
   }
 
-  def set(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
 
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.successful(None)
+
+  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
 }
 
+/**
+  * just a cache variable that records what messages are being processed by the filter service
+  */
+@Singleton
+class VerificationInspectCache extends Cache {
+
+  var verifyList = Map[String, String]()
+  var filterList = Map[String, String]()
+
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] =
+    Future.successful(filterList.get(new String(hash)))
+
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = {
+    filterList = filterList ++ List(new String(hash) -> upp)
+    Future.successful(None)
+  }
+
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = {
+    verifyList = verifyList ++ List(new String(hash) -> upp)
+    Future.successful(None)
+  }
+
+  def deleteFromVerificationCache(hash: Array[Byte]): Unit = ()
+
+  def getFromVerificationCache(hash: Array[Byte]): Option[String] = verifyList.get(new String(hash))
+}
