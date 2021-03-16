@@ -72,7 +72,7 @@ trait FilterService {
     * @param cr               The consumer record of the replay attack.
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
-  def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
+  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
 
   /**
     * Method that throws an exception in case the service cannot execute it's functionality properly

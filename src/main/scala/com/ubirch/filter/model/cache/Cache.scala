@@ -24,9 +24,15 @@ case class NoCacheConnectionException(private val message: String = "",
 trait Cache {
 
   @throws[Exception]
-  def get(hash: Array[Byte]): Future[Option[String]]
+  def getFromFilterCache(hash: Array[Byte]): Future[Option[String]]
 
   @throws[Exception]
-  def set(hash: Array[Byte], upp: String): Future[Option[String]]
+  def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]]
+
+  @throws[Exception]
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]]
+
+  @throws[Exception]
+  def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean]
 }
 

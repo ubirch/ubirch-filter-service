@@ -44,11 +44,11 @@ class RedisCacheTests extends AsyncTestBase with EmbeddedRedis with BeforeAndAft
       Thread.sleep(5000)
       val hash = "coucou".getBytes(StandardCharsets.UTF_8)
       val upp = "SALUT"
-      redisCache.set(hash, upp)
+      redisCache.setToFilterCache(hash, upp)
       Thread.sleep(500)
-      redisCache.get(hash).map(_ mustBe Some(upp))
+      redisCache.getFromFilterCache(hash).map(_ mustBe Some(upp))
       Thread.sleep(60000)
-      redisCache.get(hash).map(_ mustBe None)
+      redisCache.getFromFilterCache(hash).map(_ mustBe None)
     }
 
   }

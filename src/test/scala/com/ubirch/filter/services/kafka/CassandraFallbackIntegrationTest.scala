@@ -116,7 +116,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
     }
 
     "consume and process successfully when not found if not of type UPP update" in {
-      val payload = "c29tZSBieXRlcyEAAQIDnw=="
+      val payload = "c29tZSBieXRlcyEA7897932AQIDnw=="
 
       cassandra.executeScripts(
         CqlScript.statements(

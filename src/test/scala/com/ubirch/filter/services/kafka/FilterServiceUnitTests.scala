@@ -26,14 +26,13 @@ import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
 import com.ubirch.filter.util.ProtocolMessageUtils.{base64Encoder, rawPacket}
 import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
-import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.json4s.JObject
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{AsyncWordSpec, BeforeAndAfterAll, MustMatchers}
 
+import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.UUID
 import scala.collection.JavaConverters._
@@ -62,6 +61,12 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
   private val fakeData = ProcessingData(cr, protocolMessage)
 
   def FakeFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {
+    override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+  })) {}
+
+  def InspectVerificationCacheFilterInjector: InjectorHelper = new InjectorHelper(List(new Binder {
+    override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[VerificationInspectCache])
+
     override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
   })) {}
 
@@ -136,7 +141,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.cacheContainsHash(fakeData).map(_ mustBe None)
+      fakeFilter.filterCacheContains(fakeData).map(_ mustBe None)
     }
 
     "not disturb the forwarding of the UPP in forwardUPP()" in {
@@ -166,7 +171,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val Injector = specialInjector
 
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.cacheContainsHash(fakeData).map(_ mustBe Some("lSLEEBePszd8UUFNkp7lAJKTJyEAxAU4OTMxOcRAlwXXt+1SJKEyLPJgr+se58AcNK1y8lO649xvlDQGU5qBmKUXOrZa68OHOhK38kEkEtU50zswfDW2eGokyTQNBQ=="))
+      fakeFilter.filterCacheContains(fakeData).map(_ mustBe Some("lSLEEBePszd8UUFNkp7lAJKTJyEAxAU4OTMxOcRAlwXXt+1SJKEyLPJgr+se58AcNK1y8lO649xvlDQGU5qBmKUXOrZa68OHOhK38kEkEtU50zswfDW2eGokyTQNBQ=="))
     }
 
     "return false, when hash hasn't been stored to the cache yet" in {
@@ -178,7 +183,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
       val Injector = specialInjector
       val fakeFilter = Injector.get[FakeFilterService]
-      fakeFilter.cacheContainsHash(fakeData).map(_ mustBe None)
+      fakeFilter.filterCacheContains(fakeData).map(_ mustBe None)
     }
 
   }
@@ -325,28 +330,65 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       assert(fakeFilterService.counter == 1)
     }
 
-    "throw an NeedForPauseException if the send method throws an exception" in {
+    "throw a NeedForPauseException if the send method throws an exception" in {
       val Injector = ExceptionFilterServiceInjector
       val exceptionFilterService = Injector.get[ExceptionFilterServ]
       assertThrows[NeedForPauseException](Await.result(exceptionFilterService.forwardUPP(fakeData), Duration.Inf))
     }
+
+    val cr = new ConsumerRecord[String, String]("topic", 1, 1, "key", "Teststring")
+    "insert data to verification cache if forwarded and not of type delete, enable or disable" in {
+      val Injector = InspectVerificationCacheFilterInjector
+      val filterSvc = Injector.get[FakeFilterService]
+      val cache = Injector.get[VerificationInspectCache]
+      val pmDefault = generateMsgEnvelope(hint = 0, payload = "768768568afd").ubirchPacket
+      val pmDisable = generateMsgEnvelope(hint = 250, payload = "1223478628d").ubirchPacket
+      val pmEnable = generateMsgEnvelope(hint = 251, payload = "5356536554").ubirchPacket
+      val pmDelete = generateMsgEnvelope(hint = 251, payload = "09090909").ubirchPacket
+      val pmDefaultLater = generateMsgEnvelope(hint = 0, payload = "1010101001").ubirchPacket
+
+      filterSvc.forwardUPP(ProcessingData(cr, pmDefault))
+      filterSvc.forwardUPP(ProcessingData(cr, pmDisable))
+      filterSvc.forwardUPP(ProcessingData(cr, pmEnable))
+      filterSvc.forwardUPP(ProcessingData(cr, pmDelete))
+      filterSvc.forwardUPP(ProcessingData(cr, pmDefaultLater))
+
+      val rDefault = cache.getFromVerificationCache(pmDefault.getPayload.asText().getBytes(StandardCharsets.UTF_8))
+      val rDisable = cache.getFromVerificationCache(pmDisable.getPayload.asText().getBytes(StandardCharsets.UTF_8))
+      val rEnable = cache.getFromVerificationCache(pmEnable.getPayload.asText().getBytes(StandardCharsets.UTF_8))
+      val rDelete = cache.getFromVerificationCache(pmDelete.getPayload.asText().getBytes(StandardCharsets.UTF_8))
+      val rDefaultLater = cache.getFromVerificationCache(pmDefaultLater.getPayload.asText().getBytes(StandardCharsets.UTF_8))
+
+      val base64Default = base64Encoder.encodeToString(rawPacket(pmDefault))
+      val base64DefaultLater = base64Encoder.encodeToString(rawPacket(pmDefaultLater))
+
+      rDefault mustBe Some(base64Default)
+      rDefaultLater mustBe Some(base64DefaultLater)
+      rDisable mustBe None
+      rEnable mustBe None
+      rDelete mustBe None
+    }
+
   }
 
   "reactOnReplayAttack" must {
 
-    "throw a NeedForPauseException if the send methdos throws an exception" in {
-      val message = new MessageEnvelope(new ProtocolMessage(), mock[JObject])
+    "throw a NeedForPauseException if the send method throws an exception" in {
+      val message = generateMsgEnvelope()
       val Injector = ExceptionFilterServiceInjector
       val conf = Injector.get[Config]
+      val data = ProcessingData(cr, message.ubirchPacket)
       val exceptionFilterService = Injector.get[ExceptionFilterServ]
-      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
+      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(data, cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
     }
 
     "send the rejectionMessage successfully" in {
+      val message = generateMsgEnvelope()
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
       val conf = Injector.get[Config]
-      fakeFilterService.reactOnReplayAttack(cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC))
+      val data = ProcessingData(cr, message.ubirchPacket)
+      fakeFilterService.reactOnReplayAttack(data, cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC))
       assert(fakeFilterService.counter == 1)
     }
 

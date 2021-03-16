@@ -121,7 +121,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         } else {
 
           decideReactionBasedOnCache(data).flatMap {
-            case RejectUPP => reactOnReplayAttack(cr, Values.FOUND_IN_CACHE_MESSAGE)
+            case RejectUPP => reactOnReplayAttack(data, cr, Values.FOUND_IN_CACHE_MESSAGE)
             case ForwardUPP => forwardUPP(data)
             case InvestigateFurther =>
 
@@ -129,10 +129,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
                 data.pm.getHint match {
                   case UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE =>
                     if (foundUpp.isDefined) forwardUPP(data)
-                    else reactOnReplayAttack(cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
+                    else reactOnReplayAttack(data, cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
                   case _ =>
                     if (foundUpp.isEmpty) forwardUPP(data)
-                    else reactOnReplayAttack(cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
+                    else reactOnReplayAttack(data, cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
                 }
               }
           }
@@ -154,8 +154,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
-  def cacheContainsHash(data: ProcessingData): Future[Option[String]] = {
-    cache.get(data.payloadHash).recover {
+  def filterCacheContains(data: ProcessingData): Future[Option[String]] = {
+    cache.getFromFilterCache(data.payloadHash).recover {
       case ex: Exception =>
         publishErrorMessage(s"unable to make cache lookup '${data.cr.requestIdHeader().orNull}'.", data.cr, ex)
         None
@@ -164,7 +164,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   protected[services] def decideReactionBasedOnCache(data: ProcessingData): Future[FilterReaction] = {
 
-    cacheContainsHash(data).map {
+    filterCacheContains(data).map {
 
       case Some(cachedUpp: String) =>
         val cachedHint = retrieveHintOfUpp(cachedUpp)
@@ -228,7 +228,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param payload the payload to (eventually) trim
     * @return a trimmed string on which the first and last char will not be "
     */
-  private def trimPayload(payload: String) = {
+  private def trimPayload(payload: String): String = {
     if (payload.length > 2) {
       if (payload.head == '\"' && payload.endsWith("\"")) {
         payload.substring(1, payload.length - 1)
@@ -237,26 +237,57 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
-    addDataToCache(data)
-    val result = send(data.cr.toProducerRecord(topic = producerForwardTopic))
+
+    val result1 = addToFilterCache(data)
+
+    val result2 = if (data.pm.getHint == UPP_TYPE_DELETE || data.pm.getHint == UPP_TYPE_DISABLE)
+      deleteFromVerificationCache(data)
+    else if (data.pm.getHint != UPP_TYPE_ENABLE)
+      addToVerificationCache(data)
+    else Future.successful(())
+
+    val result3 = send(data.cr.toProducerRecord(topic = producerForwardTopic))
       .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
       .recoverWith { case ex =>
         pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, FiniteDuration(2, SECONDS))
       }
-    result.onComplete {
+    result3.onComplete {
       case Success(_) =>
         val hardwareId = data.cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
         val requestId = data.cr.requestIdHeader().orNull
         logger.info(s"Successfully forwarded msg from $hardwareId with requestId: $requestId", v("requestId", requestId), v("hardwareId", hardwareId))
       case _ =>
     }
-    result.map { x => Some(x) }
+
+    for {
+      _ <- result1
+      _ <- result2
+      recordMetaData <- result3
+    } yield {
+      Some(recordMetaData)
+    }
   }
 
-  private def addDataToCache(data: ProcessingData) = {
+  private def addToVerificationCache(data: ProcessingData): Future[Any] = {
     try {
       val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
-      cache.set(data.payloadHash, base64EncodedUpp).recover {
+      cache
+        .setToVerificationCache(data.payloadHash, base64EncodedUpp)
+        .recoverWith {
+          case ex: Exception =>
+            publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
+        }
+    } catch {
+      case ex: NullPointerException =>
+        publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
+        Future.successful(())
+    }
+  }
+
+  private def addToFilterCache(data: ProcessingData): Future[Any] = {
+    try {
+      val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
+      cache.setToFilterCache(data.payloadHash, base64EncodedUpp).recover {
         case ex: Exception =>
           publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
       }
@@ -265,6 +296,16 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         publishErrorMessage(s"unable to add value for hash ${data.payloadString} to cache.", data.cr, ex)
         Future.successful(())
     }
+  }
+
+  private def deleteFromVerificationCache(data: ProcessingData): Future[Boolean] = {
+    cache
+      .deleteFromVerificationCache(data.payloadHash)
+      .recover {
+        case ex: Exception =>
+          publishErrorMessage(s"unable to delete upp by hash ${data.payloadString} from cache.", data.cr, ex)
+          false
+      }
   }
 
   protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = production.send(producerRecord)
@@ -285,16 +326,23 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       )
   }
 
-  def reactOnReplayAttack(cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+    val result1 = addToFilterCache(data)
     val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
     val requestId = cr.requestIdHeader().orNull
     logger.warn(s"UPP/Hash already known for hardwareId: $hardwareId and requestId: $requestId message=$rejectionMessage", v("requestId", requestId), v("hardwareId", hardwareId))
-    val producerRecordToSend: ProducerRecord[String, String] = generateReplayAttackProducerRecord(cr, rejectionMessage)
-    send(producerRecordToSend)
+    val producerRecordToSend = generateReplayAttackProducerRecord(cr, rejectionMessage)
+    val result2 = send(producerRecordToSend)
       .recoverWith { case _ => send(producerRecordToSend) }
       .recoverWith { case ex: Exception =>
         pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, FiniteDuration(2, SECONDS))
-      }.map { x => Some(x) }
+      }
+    for {
+      _ <- result1
+      recordMetaData <- result2
+    } yield {
+      Some(recordMetaData)
+    }
   }
 
   /**
