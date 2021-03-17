@@ -190,22 +190,23 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
   "cacheIndicatesReplayAttack" must {
 
+    val testCR = new ConsumerRecord[String, String]("test-topic", 3, 3, "test-key", "test-value")
     //create default UPP
     val defaultUPP = generateMsgEnvelope().ubirchPacket
     val defaultAsB64 = base64Encoder.encodeToString(rawPacket(defaultUPP))
-    val defaultProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], defaultUPP)
+    val defaultProcessingData = ProcessingData(testCR, defaultUPP)
     //create disable UPP
     val disableUPP = generateMsgEnvelope(hint = 250).ubirchPacket
     val disableAsB64 = base64Encoder.encodeToString(rawPacket(disableUPP))
-    val disableProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], disableUPP)
+    val disableProcessingData = ProcessingData(testCR, disableUPP)
     //create enable UPP
     val enableUPP = generateMsgEnvelope(hint = 251).ubirchPacket
     val enableAsB64 = base64Encoder.encodeToString(rawPacket(enableUPP))
-    val enableProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], enableUPP)
+    val enableProcessingData = ProcessingData(testCR, enableUPP)
     //create delete UPP
     val deleteUPP = generateMsgEnvelope(hint = 252).ubirchPacket
     val deleteAsB64 = base64Encoder.encodeToString(rawPacket(deleteUPP))
-    val deleteProcessingData = ProcessingData(mock[ConsumerRecord[String, String]], deleteUPP)
+    val deleteProcessingData = ProcessingData(testCR, deleteUPP)
 
     "return correct reaction for incoming default UPP" in {
 
@@ -344,14 +345,14 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val pmDefault = generateMsgEnvelope(hint = 0, payload = "768768568afd").ubirchPacket
       val pmDisable = generateMsgEnvelope(hint = 250, payload = "1223478628d").ubirchPacket
       val pmEnable = generateMsgEnvelope(hint = 251, payload = "5356536554").ubirchPacket
-      val pmDelete = generateMsgEnvelope(hint = 251, payload = "09090909").ubirchPacket
+      val pmDelete = generateMsgEnvelope(hint = 252, payload = "09090909").ubirchPacket
       val pmDefaultLater = generateMsgEnvelope(hint = 0, payload = "1010101001").ubirchPacket
 
-      filterSvc.forwardUPP(ProcessingData(cr, pmDefault))
-      filterSvc.forwardUPP(ProcessingData(cr, pmDisable))
-      filterSvc.forwardUPP(ProcessingData(cr, pmEnable))
-      filterSvc.forwardUPP(ProcessingData(cr, pmDelete))
-      filterSvc.forwardUPP(ProcessingData(cr, pmDefaultLater))
+      filterSvc.deleteFromOrAddToVerificationCache(ProcessingData(cr, pmDefault))
+      filterSvc.deleteFromOrAddToVerificationCache(ProcessingData(cr, pmDisable))
+      filterSvc.deleteFromOrAddToVerificationCache(ProcessingData(cr, pmEnable))
+      filterSvc.deleteFromOrAddToVerificationCache(ProcessingData(cr, pmDelete))
+      filterSvc.deleteFromOrAddToVerificationCache(ProcessingData(cr, pmDefaultLater))
 
       val rDefault = cache.getFromVerificationCache(pmDefault.getPayload.asText().getBytes(StandardCharsets.UTF_8))
       val rDisable = cache.getFromVerificationCache(pmDisable.getPayload.asText().getBytes(StandardCharsets.UTF_8))
@@ -389,6 +390,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val conf = Injector.get[Config]
       val data = ProcessingData(cr, message.ubirchPacket)
       fakeFilterService.reactOnReplayAttack(data, cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC))
+      Thread.sleep(1000)
       assert(fakeFilterService.counter == 1)
     }
 

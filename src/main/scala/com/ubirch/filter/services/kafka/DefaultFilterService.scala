@@ -42,7 +42,6 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
-import scala.util.Success
 
 /**
   * * This service is responsible to check incoming messages for any suspicious
@@ -122,25 +121,43 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
           decideReactionBasedOnCache(data).flatMap {
             case RejectUPP => reactOnReplayAttack(data, cr, Values.FOUND_IN_CACHE_MESSAGE)
-            case ForwardUPP => forwardUPP(data)
-            case InvestigateFurther =>
 
-              makeVerificationLookup(data).flatMap { foundUpp =>
-                data.pm.getHint match {
-                  case UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE =>
-                    if (foundUpp.isDefined) forwardUPP(data)
-                    else reactOnReplayAttack(data, cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
-                  case _ =>
-                    if (foundUpp.isEmpty) forwardUPP(data)
-                    else reactOnReplayAttack(data, cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
-                }
-              }
+            case ForwardUPP => forwardUPP(data)
+
+            case InvestigateFurther => decideReactionOnCassandra(cr, data)
           }
         }
       }.getOrElse(Future.successful(None))
     }
     Future.sequence(futureResponse).map(_ => ())
 
+  }
+
+  private def decideReactionOnCassandra(cr: ConsumerRecord[String, String],
+                                        data: ProcessingData): Future[Option[RecordMetadata]] = {
+
+    val (hardwareId, requestId) = retrieveIdsForStructuredLogs(data)
+
+    makeVerificationLookup(data).flatMap { uppOpt =>
+      data.pm.getHint match {
+        case UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE =>
+          if (uppOpt.isDefined) {
+            logger.info(s"Forwarding msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash was found in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
+            forwardUPP(data)
+          } else {
+            logger.info(s"Rejecting msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash was NOT found in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
+            reactOnReplayAttack(data, cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
+          }
+        case _ =>
+          if (uppOpt.isEmpty) {
+            logger.info(s"Forwarding msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash was NOT found in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
+            forwardUPP(data)
+          } else {
+            logger.info(s"Rejecting msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash was found in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
+            reactOnReplayAttack(data, cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
+          }
+      }
+    }
   }
 
   def extractData(cr: ConsumerRecord[String, String]): Option[MessageEnvelope] = {
@@ -164,27 +181,49 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   protected[services] def decideReactionBasedOnCache(data: ProcessingData): Future[FilterReaction] = {
 
+    val (hardwareId, requestId) = retrieveIdsForStructuredLogs(data)
+
     filterCacheContains(data).map {
 
       case Some(cachedUpp: String) =>
         val cachedHint = retrieveHintOfUpp(cachedUpp)
+
+        def reject(msgType: String): FilterReaction = {
+          log(s"Rejecting $msgType")
+          RejectUPP
+        }
+
+        def forward(msgType: String): FilterReaction = {
+          log(s"Forwarding $msgType")
+          ForwardUPP
+        }
+
+        def log(reaction: String): Unit = {
+          logger.info(s"$reaction msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash and type $cachedHint was found in cache", v("requestId", requestId), v("hardwareId", hardwareId))
+        }
+
         data.pm.getHint match {
+
           case UPP_TYPE_DELETE =>
             cachedHint match {
-              case UPP_TYPE_DELETE => RejectUPP
-              case _ => ForwardUPP
+              case UPP_TYPE_DELETE => reject("delete")
+              case _ => forward("delete")
             }
           case UPP_TYPE_ENABLE =>
             cachedHint match {
-              case UPP_TYPE_ENABLE | UPP_TYPE_DELETE => RejectUPP
-              case _ => ForwardUPP
+              case UPP_TYPE_ENABLE | UPP_TYPE_DELETE => reject("enable")
+              case _ => forward("enable")
             }
           case UPP_TYPE_DISABLE =>
             cachedHint match {
-              case UPP_TYPE_DISABLE | UPP_TYPE_DELETE => RejectUPP
-              case _ => ForwardUPP
+              case UPP_TYPE_DISABLE | UPP_TYPE_DELETE => reject("disable")
+              case _ => forward("disable")
             }
-          case _ => RejectUPP
+          case _ =>
+            cachedHint match {
+              case UPP_TYPE_DELETE => forward("default")
+              case _ => reject("default")
+            }
         }
 
       case None =>
@@ -192,7 +231,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
     }.recover {
       case ex =>
-        logger.error("something went wrong checking for hint/ type of cached upp", ex)
+        logger.error(s"something went wrong checking for hint/ type of cached upp when processing msg from device $hardwareId with requestId: $requestId ", v("requestId", requestId), v("hardwareId", hardwareId), ex)
         InvestigateFurther
     }
   }
@@ -208,10 +247,8 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     val trimmedValue = trimPayload(data.payloadString)
     finder.findUPP(trimmedValue).map {
       case Some(string) =>
-        logger.info(s"found string $string in CASSANDRA")
         Some(string)
       case None =>
-        logger.info("found nothing in CASSANDRA")
         None
     }.recover {
       case ex: TimeoutException =>
@@ -238,37 +275,38 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
 
-    val result1 = addToFilterCache(data)
-
-    val result2 = if (data.pm.getHint == UPP_TYPE_DELETE || data.pm.getHint == UPP_TYPE_DISABLE)
-      deleteFromVerificationCache(data)
-    else if (data.pm.getHint != UPP_TYPE_ENABLE)
-      addToVerificationCache(data)
-    else Future.successful(())
-
-    val result3 = send(data.cr.toProducerRecord(topic = producerForwardTopic))
-      .recoverWith { case _ => send(data.cr.toProducerRecord(topic = producerForwardTopic)) }
-      .recoverWith { case ex =>
-        pauseKafkaConsumption(s"kafka error, not able to publish  ${data.cr.requestIdHeader().orNull} to $producerForwardTopic", data.cr, ex, FiniteDuration(2, SECONDS))
-      }
-    result3.onComplete {
-      case Success(_) =>
-        val hardwareId = data.cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
-        val requestId = data.cr.requestIdHeader().orNull
-        logger.info(s"Successfully forwarded msg from $hardwareId with requestId: $requestId", v("requestId", requestId), v("hardwareId", hardwareId))
-      case _ =>
-    }
-
+    val r1 = addToFilterCache(data)
+    val r2 = deleteFromOrAddToVerificationCache(data)
+    val r3 = sendAndRetry(data.cr.toProducerRecord(topic = producerForwardTopic), data.cr)
     for {
-      _ <- result1
-      _ <- result2
-      recordMetaData <- result3
+      _ <- r1
+      _ <- r2
+      recordMetaData <- r3
     } yield {
+      val (hardwareId, requestId) = retrieveIdsForStructuredLogs(data)
+      logger.info(s"Successfully forwarded msg from $hardwareId with requestId: $requestId", v("requestId", requestId), v("hardwareId", hardwareId))
       Some(recordMetaData)
     }
   }
 
-  private def addToVerificationCache(data: ProcessingData): Future[Any] = {
+  /**
+    * This method deletes the upp from or adds it to the verification cache,
+    * depending on the hint/ type of the incoming UPP.
+    *
+    * @param data incoming upp
+    */
+  private[services] def deleteFromOrAddToVerificationCache(data: ProcessingData): Future[Any] = {
+    data.pm.getHint match {
+      case UPP_TYPE_DELETE | UPP_TYPE_DISABLE => deleteFromVerificationCache(data)
+      case UPP_TYPE_ENABLE => Future.successful(())
+      case _ => addToVerificationCache(data)
+    }
+  }
+
+  /**
+    * Helper method to encode upp (to base64 encoded bytes) and store it to the cache.
+    */
+  private[services] def addToVerificationCache(data: ProcessingData): Future[Any] = {
     try {
       val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
       cache
@@ -284,7 +322,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     }
   }
 
-  private def addToFilterCache(data: ProcessingData): Future[Any] = {
+  /**
+    * Helper method to encode upp (to base64 encoded bytes) and store it to the cache.
+    */
+  private[services] def addToFilterCache(data: ProcessingData): Future[Any] = {
     try {
       val base64EncodedUpp = base64Encoder.encodeToString(rawPacket(data.pm))
       cache.setToFilterCache(data.payloadHash, base64EncodedUpp).recover {
@@ -310,6 +351,18 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = production.send(producerRecord)
 
+  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+
+    val r1 = deleteFromOrAddToVerificationCache(data)
+    val r2 = sendAndRetry(generateReplayAttackProducerRecord(cr, rejectionMessage), data.cr)
+    for {
+      _ <- r1
+      recordMetaData <- r2
+    } yield {
+      Some(recordMetaData)
+    }
+  }
+
   /**
     * Helper method that generates the producer record that will be sent when a replay attack is detected
     *
@@ -317,7 +370,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param rejectionMessage why the message was rejected
     * @return a producer record with the correct HTTP headers and value
     */
-  def generateReplayAttackProducerRecord(cr: ConsumerRecord[String, String], rejectionMessage: String): ProducerRecord[String, String] = {
+  protected[services] def generateReplayAttackProducerRecord(cr: ConsumerRecord[String, String], rejectionMessage: String): ProducerRecord[String, String] = {
     val payload = Error(error = Values.REPLAY_ATTACK_NAME, causes = Seq(rejectionMessage), requestId = cr.requestIdHeader().orNull).toJson
     cr.toProducerRecord(producerRejectionTopic, payload)
       .withExtraHeaders(
@@ -326,23 +379,12 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       )
   }
 
-  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
-    val result1 = addToFilterCache(data)
-    val hardwareId = cr.findHeader(HARDWARE_ID_HEADER_KEY).orNull
-    val requestId = cr.requestIdHeader().orNull
-    logger.warn(s"UPP/Hash already known for hardwareId: $hardwareId and requestId: $requestId message=$rejectionMessage", v("requestId", requestId), v("hardwareId", hardwareId))
-    val producerRecordToSend = generateReplayAttackProducerRecord(cr, rejectionMessage)
-    val result2 = send(producerRecordToSend)
-      .recoverWith { case _ => send(producerRecordToSend) }
-      .recoverWith { case ex: Exception =>
-        pauseKafkaConsumption(s"kafka error: ${producerRecordToSend.value()} could not be send to topic $producerRejectionTopic", cr, ex, FiniteDuration(2, SECONDS))
+  private def sendAndRetry(pr: ProducerRecord[String, String], cr: ConsumerRecord[String, String]): Future[RecordMetadata] = {
+    send(pr)
+      .recoverWith { case _ => send(pr) }
+      .recoverWith { case ex =>
+        pauseKafkaConsumption(s"kafka error: ${pr.value()} could not be send to topic ${pr.topic()}", cr, ex, FiniteDuration(2, SECONDS))
       }
-    for {
-      _ <- result1
-      recordMetaData <- result2
-    } yield {
-      Some(recordMetaData)
-    }
   }
 
   /**
@@ -369,6 +411,12 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     publishErrorMessage(errorMessage, cr, ex)
     logger.error("throwing NeedForPauseException to pause kafka message consumption")
     throw NeedForPauseException(errorMessage, ex.getMessage, Some(mayBeDuration))
+  }
+
+  private def retrieveIdsForStructuredLogs(data: ProcessingData): (String, String) = {
+    val hardwareId = data.cr.findHeader(HARDWARE_ID_HEADER_KEY).getOrElse("(hardware_id_header missing)")
+    val requestId = data.cr.requestIdHeader().orNull
+    (hardwareId, requestId)
   }
 
   lifecycle.addStopHook { () =>
