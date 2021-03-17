@@ -275,11 +275,13 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   def forwardUPP(data: ProcessingData): Future[Option[RecordMetadata]] = {
 
+    val r1 = addToFilterCache(data)
+    val r2 = deleteFromOrAddToVerificationCache(data)
+    val r3 = sendAndRetry(data.cr.toProducerRecord(topic = producerForwardTopic), data.cr)
     for {
-      _ <- addToFilterCache(data)
-      _ <- deleteFromOrAddToVerificationCache(data)
-      recordMetaData <- sendAndRetry(data.cr.toProducerRecord(topic = producerForwardTopic), data.cr)
-
+      _ <- r1
+      _ <- r2
+      recordMetaData <- r3
     } yield {
       val (hardwareId, requestId) = retrieveIdsForStructuredLogs(data)
       logger.info(s"Successfully forwarded msg from $hardwareId with requestId: $requestId", v("requestId", requestId), v("hardwareId", hardwareId))
@@ -351,9 +353,11 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
 
+    val r1 = deleteFromOrAddToVerificationCache(data)
+    val r2 = sendAndRetry(generateReplayAttackProducerRecord(cr, rejectionMessage), data.cr)
     for {
-      _ <- deleteFromOrAddToVerificationCache(data)
-      recordMetaData <- sendAndRetry(generateReplayAttackProducerRecord(cr, rejectionMessage), data.cr)
+      _ <- r1
+      recordMetaData <- r2
     } yield {
       Some(recordMetaData)
     }
