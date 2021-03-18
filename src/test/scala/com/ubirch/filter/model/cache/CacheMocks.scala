@@ -17,7 +17,7 @@
 package com.ubirch.filter.model.cache
 
 import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
-import com.ubirch.filter.util.ProtocolMessageUtils.{base64Encoder, rawPacket}
+import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Encoder, rawPacket }
 
 import java.util.UUID
 import java.util.concurrent.TimeoutException

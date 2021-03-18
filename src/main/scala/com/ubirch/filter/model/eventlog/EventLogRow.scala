@@ -23,7 +23,7 @@ import org.json4s.JValue
   * @param signature     Represents the signature for the event log.
   * @param nonce         Represents a value that can be used to calculate the hash of the event.
   * @param status        Represents a status that this event is enabled or disabled.
- */
+  */
 
 case class EventLogRow(
     id: String,

@@ -2,8 +2,8 @@ package com.ubirch.filter.testUtils
 
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.protocol.ProtocolMessage
-import com.ubirch.protocol.codec.{MsgPackProtocolDecoder, MsgPackProtocolEncoder}
-import org.json4s.JsonAST.{JObject, JString}
+import com.ubirch.protocol.codec.{ MsgPackProtocolDecoder, MsgPackProtocolEncoder }
+import org.json4s.JsonAST.{ JObject, JString }
 
 import java.util.UUID
 
@@ -19,11 +19,11 @@ object MessageEnvelopeGenerator {
     * @return
     */
   def generateMsgEnvelope(
-                           uuid: UUID = UUID.randomUUID(),
-                           version: Int = 34,
-                           hint: Int = 0,
-                           payload: Object = "89319".getBytes()
-                         ): MessageEnvelope = {
+      uuid: UUID = UUID.randomUUID(),
+      version: Int = 34,
+      hint: Int = 0,
+      payload: Object = "89319".getBytes()
+  ): MessageEnvelope = {
 
     val pmNew = new ProtocolMessage(version, uuid, hint, payload)
     val pmRaw = msgPackEncoder.encode(pmNew, signer)
