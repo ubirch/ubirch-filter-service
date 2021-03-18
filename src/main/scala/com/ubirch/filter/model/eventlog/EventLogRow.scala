@@ -22,7 +22,8 @@ import org.json4s.JValue
   *                      to support its creation from the eventTime.
   * @param signature     Represents the signature for the event log.
   * @param nonce         Represents a value that can be used to calculate the hash of the event.
-  */
+  * @param status        Represents a status that this event is enabled or disabled.
+ */
 
 case class EventLogRow(
     id: String,
@@ -33,7 +34,8 @@ case class EventLogRow(
     eventTime: Date,
     eventTimeInfo: TimeInfo,
     signature: String,
-    nonce: String
+    nonce: String,
+    status: Option[String]
 )
 
 /**
