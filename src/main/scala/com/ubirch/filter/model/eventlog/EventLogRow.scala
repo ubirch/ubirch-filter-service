@@ -35,7 +35,7 @@ case class EventLogRow(
     eventTimeInfo: TimeInfo,
     signature: String,
     nonce: String,
-    status: Option[String]
+    status: Option[String] = None
 )
 
 /**
