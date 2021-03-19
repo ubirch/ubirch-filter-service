@@ -31,6 +31,7 @@ trait EmbeddedCassandra extends LazyLogging {
   val eventLogCreationCassandraStatement: CqlScript = CqlScript.statements(
     "CREATE KEYSPACE IF NOT EXISTS event_log WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };",
     "USE event_log;",
+    "drop MATERIALIZED VIEW IF exists events_by_cat",
     "drop table if exists events;",
     """
       |create table if not exists events (
@@ -49,8 +50,9 @@ trait EmbeddedCassandra extends LazyLogging {
       |    milli int,
       |    event_time timestamp,
       |    nonce text,
-      |    PRIMARY KEY ((id, category), year, month, day, hour)
-      |) WITH CLUSTERING ORDER BY (year desc, month DESC, day DESC);
+      |    status text,
+      |    PRIMARY KEY ((id, category), year, month, day, hour, minute, second, milli)
+      |) WITH CLUSTERING ORDER BY (year DESC, month DESC, day DESC, hour DESC, minute DESC, second DESC, milli DESC);
     """.stripMargin,
     "drop table if exists lookups;",
     """

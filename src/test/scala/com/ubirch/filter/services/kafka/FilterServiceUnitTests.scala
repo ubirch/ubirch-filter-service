@@ -24,13 +24,13 @@ import com.ubirch.filter.model._
 import com.ubirch.filter.model.cache._
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
-import com.ubirch.filter.util.ProtocolMessageUtils.{base64Encoder, rawPacket}
-import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
+import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Encoder, rawPacket }
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper }
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{AsyncWordSpec, BeforeAndAfterAll, MustMatchers}
+import org.scalatest.{ AsyncWordSpec, BeforeAndAfterAll, MustMatchers }
 
 import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8

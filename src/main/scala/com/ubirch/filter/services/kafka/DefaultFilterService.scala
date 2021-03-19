@@ -18,30 +18,30 @@ package com.ubirch.filter.services.kafka
 
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
-import com.ubirch.filter.model.Values.{UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
+import com.ubirch.filter.model.Values.{ UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE }
 import com.ubirch.filter.model._
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.services.Lifecycle
-import com.ubirch.filter.util.ProtocolMessageUtils.{base64Decoder, base64Encoder, msgPackDecoder, rawPacket}
+import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Decoder, base64Encoder, msgPackDecoder, rawPacket }
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
-import com.ubirch.kafka.{MessageEnvelope, RichAnyConsumerRecord, _}
+import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord, _ }
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
+import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
 
 import java.util.concurrent.TimeoutException
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 import scala.collection.immutable
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
-import scala.language.{implicitConversions, postfixOps}
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.language.{ implicitConversions, postfixOps }
 
 /**
   * * This service is responsible to check incoming messages for any suspicious
@@ -58,15 +58,15 @@ import scala.language.{implicitConversions, postfixOps}
   * @author ${user.name}
   */
 @Singleton
-class DefaultFilterService @Inject()(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)
+class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle)
 
 abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)
   extends FilterService
-    with ExpressKafka[String, String, Unit]
-    with LazyLogging
-    with ConsumerConfPaths
-    with ProducerConfPaths
-    with FilterConfPaths {
+  with ExpressKafka[String, String, Unit]
+  with LazyLogging
+  with ConsumerConfPaths
+  with ProducerConfPaths
+  with FilterConfPaths {
 
   override val prefix: String = "Ubirch"
 
@@ -133,8 +133,10 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   }
 
-  private def decideReactionOnCassandra(cr: ConsumerRecord[String, String],
-                                        data: ProcessingData): Future[Option[RecordMetadata]] = {
+  private def decideReactionOnCassandra(
+      cr: ConsumerRecord[String, String],
+      data: ProcessingData
+  ): Future[Option[RecordMetadata]] = {
 
     val (hardwareId, requestId) = retrieveIdsForStructuredLogs(data)
 
@@ -395,9 +397,11 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param ex           The exception being thrown.
     * @return
     */
-  private def publishErrorMessage(errorMessage: String,
-                                  cr: ConsumerRecord[String, String],
-                                  ex: Throwable): Future[Any] = {
+  private def publishErrorMessage(
+      errorMessage: String,
+      cr: ConsumerRecord[String, String],
+      ex: Throwable
+  ): Future[Any] = {
     logger.error(errorMessage, ex.getMessage, ex)
     val payload = Error(error = ex.getClass.getSimpleName, causes = Seq(errorMessage), requestId = cr.requestIdHeader().orNull).toJson
     val producerRecordToSend = cr

@@ -1,13 +1,13 @@
 package com.ubirch.filter
 
 import com.typesafe.config.Config
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{AsyncWordSpec, BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers}
+import org.scalatest.{ AsyncWordSpec, BeforeAndAfterAll, BeforeAndAfterEach, MustMatchers }
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{ Await, Future }
 
 trait AsyncTestBase extends AsyncWordSpec
   with ScalaFutures

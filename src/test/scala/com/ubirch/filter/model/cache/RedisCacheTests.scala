@@ -2,10 +2,10 @@ package com.ubirch.filter.model.cache
 
 import com.github.sebruck.EmbeddedRedis
 import com.google.inject.binder.ScopedBindingBuilder
-import com.typesafe.config.{Config, ConfigValueFactory}
+import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.ubirch.filter.ConfPaths.RedisConfPaths
 import com.ubirch.filter.services.config.ConfigProvider
-import com.ubirch.filter.{AsyncTestBase, Binder, InjectorHelper}
+import com.ubirch.filter.{ AsyncTestBase, Binder, InjectorHelper }
 import org.scalatest.BeforeAndAfter
 import redis.embedded.RedisServer
 

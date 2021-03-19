@@ -2,19 +2,19 @@ package com.ubirch.filter.services.kafka
 
 import com.github.nosan.embedded.cassandra.cql.CqlScript
 import com.google.inject.binder.ScopedBindingBuilder
-import com.typesafe.config.{Config, ConfigValueFactory}
+import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, ProducerConfPaths}
-import com.ubirch.filter.model.cache.{Cache, CacheMockAlwaysFalse}
-import com.ubirch.filter.model.{Error, Values}
+import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, ProducerConfPaths }
+import com.ubirch.filter.model.cache.{ Cache, CacheMockAlwaysFalse }
+import com.ubirch.filter.model.{ Error, Values }
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
-import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper, TestBase}
+import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
 import io.prometheus.client.CollectorRegistry
-import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
-import org.apache.kafka.common.serialization.{Deserializer, Serializer}
+import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
+import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
 import org.json4s.Formats
 import redis.embedded.RedisServer
 
@@ -38,9 +38,9 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-      ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-      ConfigValueFactory.fromAnyRef(bootstrapServers)
-    )
+        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+        ConfigValueFactory.fromAnyRef(bootstrapServers)
+      )
   }
 
   /**
@@ -250,7 +250,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
 
   def insertEventSql(uuid: String = UUID.randomUUID().toString, payload: String, hint: Int = 0): String =
     s"""
-       |INSERT INTO events (id, customer_id, service_class, category, event, event_time, year, month, day, hour, minute, second, milli, signature, nonce)
+       |INSERT INTO events (id, customer_id, service_class, category, event, event_time, year, month, day, hour, minute, second, milli, signature, nonce, status)
        | VALUES ('$payload', 'customer_id', 'service_class', '${Values.UPP_CATEGORY}', '{
        |   "hint":$hint,
        |   "payload":"$payload",
@@ -259,7 +259,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
        |   "uuid":$uuid,
        |   "version":34
        |}', '2019-01-29T17:00:28.333Z', 2019, 5, 2, 19, 439, 16, 0, '0681D35827B17104A2AACCE5A08C4CD1BC8A5EF5EFF4A471D15976693CC0D6D67392F1CACAE63565D6E521D2325A998CDE00A2FEF5B65D0707F4158000EB6D05',
-       |'34376336396166392D336533382D343665652D393063332D616265313364383335353266');
+       |'34376336396166392D336533382D343665652D393063332D616265313364383335353266', 'ENABLED');
     """.stripMargin
 
 }

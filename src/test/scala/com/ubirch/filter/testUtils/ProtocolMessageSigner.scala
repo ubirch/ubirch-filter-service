@@ -7,7 +7,7 @@ import com.ubirch.protocol.Protocol
 import org.apache.commons.codec.binary.Hex
 
 import java.io.IOException
-import java.security.{InvalidKeyException, MessageDigest, NoSuchAlgorithmException, SignatureException}
+import java.security.{ InvalidKeyException, MessageDigest, NoSuchAlgorithmException, SignatureException }
 import java.util
 import java.util.UUID
 

@@ -2,7 +2,7 @@ package com.ubirch.filter.util
 
 import com.ubirch.filter.TestBase
 import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
-import com.ubirch.filter.util.ProtocolMessageUtils.{msgPackConfig, rawPacket}
+import com.ubirch.filter.util.ProtocolMessageUtils.{ msgPackConfig, rawPacket }
 
 import java.io.ByteArrayOutputStream
 

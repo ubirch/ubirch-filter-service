@@ -6,21 +6,21 @@ import com.ubirch.filter.ConfPaths.RedisConfPaths
 import com.ubirch.filter.services.Lifecycle
 import monix.execution.Scheduler
 import org.redisson.Redisson
-import org.redisson.api.{RMapCache, RedissonClient}
+import org.redisson.api.{ RMapCache, RedissonClient }
 
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import java.util.function.BiConsumer
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 import scala.concurrent.duration.DurationInt
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ Future, Promise }
 
 /**
   * Cache implementation for redis with a Map that stores the
   * payload/hash as a key and a boolean as the value that is always true
   */
 @Singleton
-class CacheImpl @Inject()(lifecycle: Lifecycle, config: Config)(implicit scheduler: Scheduler)
+class CacheImpl @Inject() (lifecycle: Lifecycle, config: Config)(implicit scheduler: Scheduler)
   extends Cache with LazyLogging with RedisConfPaths {
 
   private val port: String = config.getString(REDIS_PORT)

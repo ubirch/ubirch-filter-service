@@ -1,6 +1,6 @@
 package com.ubirch.filter.services.kafka
 
-import com.ubirch.filter.model.{FilterReaction, ProcessingData}
+import com.ubirch.filter.model.{ FilterReaction, ProcessingData }
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import org.apache.kafka.clients.consumer.ConsumerRecord

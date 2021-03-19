@@ -18,8 +18,10 @@ package com.ubirch.filter.model.cache
 
 import scala.concurrent.Future
 
-case class NoCacheConnectionException(private val message: String = "",
-                                      private val cause: Throwable = None.orNull) extends Exception(message, cause)
+case class NoCacheConnectionException(
+    private val message: String = "",
+    private val cause: Throwable = None.orNull
+) extends Exception(message, cause)
 
 trait Cache {
 
