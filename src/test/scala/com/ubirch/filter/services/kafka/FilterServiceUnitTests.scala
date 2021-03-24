@@ -24,13 +24,13 @@ import com.ubirch.filter.model._
 import com.ubirch.filter.model.cache._
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
-import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Encoder, rawPacket }
-import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper }
+import com.ubirch.filter.util.ProtocolMessageUtils.{base64Encoder, rawPacket}
+import com.ubirch.filter.{Binder, EmbeddedCassandra, InjectorHelper}
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{ AsyncWordSpec, BeforeAndAfterAll, MustMatchers }
+import org.scalatest.{AsyncWordSpec, BeforeAndAfterAll, MustMatchers}
 
 import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
@@ -222,7 +222,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
       // default UPP returns RejectUPP, when a UPP with that hash has already been stored to the cache
       cache.setMockUpp(Some(defaultAsB64))
-      fakeFilter.decideReactionBasedOnCache(defaultProcessingData).map(_ mustBe RejectUPP)
+      fakeFilter.decideReactionBasedOnCache(defaultProcessingData).map(_ mustBe RejectCreateUPP)
 
       // default UPP returns InvestigateFurther, when no UPP with that hash has been stored to the cache yet
       cache.setMockUpp(None)
@@ -243,7 +243,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
       // delete UPP returns RejectUPP, when delete UPP already has been stored to the cache
       cache.setMockUpp(Some(deleteAsB64))
-      fakeFilter.decideReactionBasedOnCache(deleteProcessingData).map(_ mustBe RejectUPP)
+      fakeFilter.decideReactionBasedOnCache(deleteProcessingData).map(_ mustBe RejectDeleteUPP)
 
       // delete UPP returns ForwardUPP, when another UPP than delete has been stored to the cache already
       cache.setMockUpp(Some(defaultAsB64))
@@ -268,11 +268,11 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
       // enable UPP returns  RejectUPP, when enable UPP has been stored to the cache already
       cache.setMockUpp(Some(enableAsB64))
-      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe RejectUPP)
+      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe RejectEnableUPP)
 
       // enable UPP returns RejectUPP, when delete UPP has been stored to the cache already
       cache.setMockUpp(Some(deleteAsB64))
-      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe RejectUPP)
+      fakeFilter.decideReactionBasedOnCache(enableProcessingData).map(_ mustBe RejectEnableUPP)
 
       // enable UPP returns ForwardUPP, when another UPP than enable or delete has been stored to the cache already
       cache.setMockUpp(Some(defaultAsB64))
@@ -301,11 +301,11 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
       // disable UUP returns RejectUPP, when disable UPP has not been stored to the cache already
       cache.setMockUpp(Some(disableAsB64))
-      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe RejectUPP)
+      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe RejectDisableUPP)
 
       // disable UUP returns RejectUPP, when delete UPP has not been stored to the cache already
       cache.setMockUpp(Some(deleteAsB64))
-      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe RejectUPP)
+      fakeFilter.decideReactionBasedOnCache(disableProcessingData).map(_ mustBe RejectDisableUPP)
 
       // disable UUP returns ForwardUPP, when another UPP than disable or delete has been stored to the cache already
       cache.setMockUpp(Some(defaultAsB64))
@@ -342,11 +342,11 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val Injector = InspectVerificationCacheFilterInjector
       val filterSvc = Injector.get[FakeFilterService]
       val cache = Injector.get[VerificationInspectCache]
-      val pmDefault = generateMsgEnvelope(hint = 0, payload = "768768568afd").ubirchPacket
+      val pmDefault = generateMsgEnvelope(payload = "768768568afd").ubirchPacket
       val pmDisable = generateMsgEnvelope(hint = 250, payload = "1223478628d").ubirchPacket
       val pmEnable = generateMsgEnvelope(hint = 251, payload = "5356536554").ubirchPacket
       val pmDelete = generateMsgEnvelope(hint = 252, payload = "09090909").ubirchPacket
-      val pmDefaultLater = generateMsgEnvelope(hint = 0, payload = "1010101001").ubirchPacket
+      val pmDefaultLater = generateMsgEnvelope(payload = "1010101001").ubirchPacket
 
       filterSvc.deleteFromOrAddToVerificationCache(ProcessingData(cr, pmDefault))
       filterSvc.deleteFromOrAddToVerificationCache(ProcessingData(cr, pmDisable))
@@ -380,7 +380,7 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val conf = Injector.get[Config]
       val data = ProcessingData(cr, message.ubirchPacket)
       val exceptionFilterService = Injector.get[ExceptionFilterServ]
-      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(data, cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
+      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(data, RejectCreateUPP, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
     }
 
     "send the rejectionMessage successfully" in {
@@ -389,17 +389,43 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val fakeFilterService = Injector.get[FakeFilterService]
       val conf = Injector.get[Config]
       val data = ProcessingData(cr, message.ubirchPacket)
-      fakeFilterService.reactOnReplayAttack(data, cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC))
+      fakeFilterService.reactOnReplayAttack(data, RejectCreateUPP, conf.getString(ProducerConfPaths.REJECTION_TOPIC))
       Thread.sleep(1000)
       assert(fakeFilterService.counter == 1)
     }
 
-    "Add the http headers" in {
+    "Add the http create rejection headers" in {
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
-      val headers: Map[String, String] = fakeFilterService.generateReplayAttackProducerRecord(cr, "coucou").headers().asScala.map(h => h.key() -> new String(h.value(), UTF_8))(breakOut)
+      val headers: Map[String, String] = fakeFilterService.generateReplayAttackProducerRecord(cr, RejectCreateUPP, "coucou").headers().asScala.map(h => h.key() -> new String(h.value(), UTF_8))(breakOut)
       headers(Values.HTTP_STATUS_CODE_HEADER) mustBe Values.HTTP_STATUS_CODE_REJECTION_ERROR
+      headers(Values.UBIRCH_ERROR_CODE_HEADER) mustBe Values.UBIRCH_ERROR_CODE_CREATE
     }
+
+    "Add the http disable rejection headers" in {
+      val Injector = FakeFilterServiceInjector
+      val fakeFilterService = Injector.get[FakeFilterService]
+      val headers: Map[String, String] = fakeFilterService.generateReplayAttackProducerRecord(cr, RejectDisableUPP, "coucou").headers().asScala.map(h => h.key() -> new String(h.value(), UTF_8))(breakOut)
+      headers(Values.HTTP_STATUS_CODE_HEADER) mustBe Values.HTTP_STATUS_CODE_REJECTION_ERROR
+      headers(Values.UBIRCH_ERROR_CODE_HEADER) mustBe Values.UBIRCH_ERROR_CODE_DISABLE
+    }
+
+    "Add the http enable rejection headers" in {
+      val Injector = FakeFilterServiceInjector
+      val fakeFilterService = Injector.get[FakeFilterService]
+      val headers: Map[String, String] = fakeFilterService.generateReplayAttackProducerRecord(cr, RejectEnableUPP, "coucou").headers().asScala.map(h => h.key() -> new String(h.value(), UTF_8))(breakOut)
+      headers(Values.HTTP_STATUS_CODE_HEADER) mustBe Values.HTTP_STATUS_CODE_REJECTION_ERROR
+      headers(Values.UBIRCH_ERROR_CODE_HEADER) mustBe Values.UBIRCH_ERROR_CODE_ENABLE
+    }
+
+    "Add the http delete rejection headers" in {
+      val Injector = FakeFilterServiceInjector
+      val fakeFilterService = Injector.get[FakeFilterService]
+      val headers: Map[String, String] = fakeFilterService.generateReplayAttackProducerRecord(cr, RejectDeleteUPP, "coucou").headers().asScala.map(h => h.key() -> new String(h.value(), UTF_8))(breakOut)
+      headers(Values.HTTP_STATUS_CODE_HEADER) mustBe Values.HTTP_STATUS_CODE_REJECTION_ERROR
+      headers(Values.UBIRCH_ERROR_CODE_HEADER) mustBe Values.UBIRCH_ERROR_CODE_DELETE
+    }
+
   }
 
 }
