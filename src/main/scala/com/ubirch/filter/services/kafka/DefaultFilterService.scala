@@ -18,30 +18,30 @@ package com.ubirch.filter.services.kafka
 
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
-import com.ubirch.filter.model.Values.{ UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE }
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.model.Values.{UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE}
 import com.ubirch.filter.model._
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.services.Lifecycle
-import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Decoder, base64Encoder, msgPackDecoder, rawPacket }
+import com.ubirch.filter.util.ProtocolMessageUtils.{base64Decoder, base64Encoder, msgPackDecoder, rawPacket}
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
-import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord, _ }
+import com.ubirch.kafka.{MessageEnvelope, RichAnyConsumerRecord, _}
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
 
 import java.util.concurrent.TimeoutException
-import javax.inject.{ Inject, Singleton }
+import javax.inject.{Inject, Singleton}
 import scala.collection.immutable
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, Future }
-import scala.language.{ implicitConversions, postfixOps }
+import scala.concurrent.{ExecutionContext, Future}
+import scala.language.{implicitConversions, postfixOps}
 
 /**
   * * This service is responsible to check incoming messages for any suspicious
@@ -120,11 +120,11 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
         } else {
 
           decideReactionBasedOnCache(data).flatMap {
-            case RejectUPP => reactOnReplayAttack(data, cr, Values.FOUND_IN_CACHE_MESSAGE)
+            case reject: RejectUPP => reactOnReplayAttack(data, reject, Values.FOUND_IN_CACHE_MESSAGE)
 
             case ForwardUPP => forwardUPP(data)
 
-            case InvestigateFurther => decideReactionOnCassandra(cr, data)
+            case InvestigateFurther => decideReactionOnCassandra(data)
           }
         }
       }.getOrElse(Future.successful(None))
@@ -134,7 +134,6 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
   }
 
   private def decideReactionOnCassandra(
-      cr: ConsumerRecord[String, String],
       data: ProcessingData
   ): Future[Option[RecordMetadata]] = {
 
@@ -142,13 +141,13 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
     makeVerificationLookup(data).flatMap { uppOpt =>
       data.pm.getHint match {
-        case UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE =>
+        case hint@(UPP_TYPE_DELETE | UPP_TYPE_ENABLE | UPP_TYPE_DISABLE) =>
           if (uppOpt.isDefined) {
             logger.info(s"Forwarding msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash was found in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
             forwardUPP(data)
           } else {
             logger.info(s"Rejecting msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash was NOT found in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
-            reactOnReplayAttack(data, cr, Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
+            reactOnReplayAttack(data, getRejectUppFromHint(hint), Values.NOT_FOUND_IN_VERIFICATION_MESSAGE)
           }
         case _ =>
           if (uppOpt.isEmpty) {
@@ -156,9 +155,17 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
             forwardUPP(data)
           } else {
             logger.info(s"Rejecting msg of type ${data.pm.getHint} from device $hardwareId with requestId: $requestId as msg with same hash was found in cassandra", v("requestId", requestId), v("hardwareId", hardwareId))
-            reactOnReplayAttack(data, cr, Values.FOUND_IN_VERIFICATION_MESSAGE)
+            reactOnReplayAttack(data, RejectCreateUPP, Values.FOUND_IN_VERIFICATION_MESSAGE)
           }
       }
+    }
+  }
+
+  private def getRejectUppFromHint(hint: Int): RejectUPP = {
+    hint match {
+      case UPP_TYPE_DISABLE => RejectDisableUPP
+      case UPP_TYPE_ENABLE => RejectEnableUPP
+      case UPP_TYPE_DELETE => RejectDeleteUPP
     }
   }
 
@@ -190,9 +197,9 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
       case Some(cachedUpp: String) =>
         val cachedHint = retrieveHintOfUpp(cachedUpp)
 
-        def reject(msgType: String): FilterReaction = {
+        def reject(msgType: String, rejectUPP: RejectUPP): FilterReaction = {
           log(s"Rejecting $msgType")
-          RejectUPP
+          rejectUPP
         }
 
         def forward(msgType: String): FilterReaction = {
@@ -208,23 +215,23 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
           case UPP_TYPE_DELETE =>
             cachedHint match {
-              case UPP_TYPE_DELETE => reject("delete")
+              case UPP_TYPE_DELETE => reject("delete", RejectDeleteUPP)
               case _ => forward("delete")
             }
           case UPP_TYPE_ENABLE =>
             cachedHint match {
-              case UPP_TYPE_ENABLE | UPP_TYPE_DELETE => reject("enable")
+              case UPP_TYPE_ENABLE | UPP_TYPE_DELETE => reject("enable", RejectEnableUPP)
               case _ => forward("enable")
             }
           case UPP_TYPE_DISABLE =>
             cachedHint match {
-              case UPP_TYPE_DISABLE | UPP_TYPE_DELETE => reject("disable")
+              case UPP_TYPE_DISABLE | UPP_TYPE_DELETE => reject("disable", RejectDisableUPP)
               case _ => forward("disable")
             }
           case _ =>
             cachedHint match {
               case UPP_TYPE_DELETE => forward("default")
-              case _ => reject("default")
+              case _ => reject("default", RejectCreateUPP)
             }
         }
 
@@ -353,13 +360,15 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
 
   protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = production.send(producerRecord)
 
-  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]] = {
+  def reactOnReplayAttack(data: ProcessingData, rejectUpp: RejectUPP, rejectionMessage: String): Future[Option[RecordMetadata]] = {
 
-    val r1 = deleteFromOrAddToVerificationCache(data)
-    val r2 = sendAndRetry(generateReplayAttackProducerRecord(cr, rejectionMessage), data.cr)
+    val r1 = addToFilterCache(data)
+    val r2 = deleteFromOrAddToVerificationCache(data)
+    val r3 = sendAndRetry(generateReplayAttackProducerRecord(data.cr, rejectUpp, rejectionMessage), data.cr)
     for {
       _ <- r1
-      recordMetaData <- r2
+      _ <- r2
+      recordMetaData <- r3
     } yield {
       Some(recordMetaData)
     }
@@ -372,13 +381,23 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     * @param rejectionMessage why the message was rejected
     * @return a producer record with the correct HTTP headers and value
     */
-  protected[services] def generateReplayAttackProducerRecord(cr: ConsumerRecord[String, String], rejectionMessage: String): ProducerRecord[String, String] = {
+  protected[services] def generateReplayAttackProducerRecord(cr: ConsumerRecord[String, String], rejectUpp: RejectUPP, rejectionMessage: String): ProducerRecord[String, String] = {
     val payload = Error(error = Values.REPLAY_ATTACK_NAME, causes = Seq(rejectionMessage), requestId = cr.requestIdHeader().orNull).toJson
     cr.toProducerRecord(producerRejectionTopic, payload)
       .withExtraHeaders(
         Values.HTTP_STATUS_CODE_HEADER -> Values.HTTP_STATUS_CODE_REJECTION_ERROR,
-        Values.PREVIOUS_MICROSERVICE -> "Niomon-Filter"
+        Values.PREVIOUS_MICROSERVICE -> "Niomon-Filter",
+        Values.UBIRCH_ERROR_CODE_HEADER -> getUbirchErrorCode(rejectUpp)
       )
+  }
+
+  private def getUbirchErrorCode(rejectUpp: RejectUPP): String = {
+    rejectUpp match {
+      case RejectCreateUPP => Values.UBIRCH_ERROR_CODE_CREATE
+      case RejectDisableUPP => Values.UBIRCH_ERROR_CODE_DISABLE
+      case RejectEnableUPP => Values.UBIRCH_ERROR_CODE_ENABLE
+      case RejectDeleteUPP => Values.UBIRCH_ERROR_CODE_DELETE
+    }
   }
 
   private def sendAndRetry(pr: ProducerRecord[String, String], cr: ConsumerRecord[String, String]): Future[RecordMetadata] = {

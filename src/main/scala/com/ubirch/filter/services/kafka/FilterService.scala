@@ -1,6 +1,6 @@
 package com.ubirch.filter.services.kafka
 
-import com.ubirch.filter.model.{ FilterReaction, ProcessingData }
+import com.ubirch.filter.model.{FilterReaction, ProcessingData, RejectUPP}
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -69,10 +69,11 @@ trait FilterService {
     * the message is failing an exception is thrown to make the underlyingCKafka app wait
     * before continuing with processing the same messages once more.
     *
-    * @param cr               The consumer record of the replay attack.
+    * @param data             The data to become processed incl. consumer record of the replay attack.
+    * @param rejectUPP        The object defining the cause of the rejection and the ubirch error code returned.
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
-  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
+  def reactOnReplayAttack(data: ProcessingData, rejectUPP: RejectUPP, rejectionMessage: String): Future[Option[RecordMetadata]]
 
   /**
     * Method that throws an exception in case the service cannot execute it's functionality properly
