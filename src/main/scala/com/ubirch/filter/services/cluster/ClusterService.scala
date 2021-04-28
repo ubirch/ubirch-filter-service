@@ -6,7 +6,11 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RoundRobinPolicy
 import com.typesafe.config.Config
 import com.ubirch.filter.ConfPaths.CassandraClusterConfPaths
-import com.ubirch.filter.util.Exceptions.{ InvalidConsistencyLevel, InvalidContactPointsException, NoContactPointsException }
+import com.ubirch.filter.util.Exceptions.{
+  InvalidConsistencyLevel,
+  InvalidContactPointsException,
+  NoContactPointsException
+}
 import javax.inject._
 
 /**
@@ -27,7 +31,7 @@ trait ClusterConfigs {
           .map { entry =>
             entry.split(":").toList.map(_.trim).filter(_.nonEmpty) match {
               case List(ip, portNumber) => new InetSocketAddress(ip, portNumber.toInt)
-              case _ => throw InvalidContactPointsException(s"The string provided is malformed: $contactPoints")
+              case _                    => throw InvalidContactPointsException(s"The string provided is malformed: $contactPoints")
             }
           }
       } else {
@@ -47,16 +51,17 @@ trait ClusterConfigs {
 
   val maybeSerialConsistencyLevel: Option[ConsistencyLevel]
 
-  def checkConsistencyLevel(consistencyLevel: String): Option[ConsistencyLevel] = try {
-    if (consistencyLevel.isEmpty)
-      None
-    else {
-      Option(ConsistencyLevel.valueOf(consistencyLevel))
+  def checkConsistencyLevel(consistencyLevel: String): Option[ConsistencyLevel] =
+    try {
+      if (consistencyLevel.isEmpty)
+        None
+      else {
+        Option(ConsistencyLevel.valueOf(consistencyLevel))
+      }
+    } catch {
+      case e: Exception =>
+        throw InvalidConsistencyLevel("Invalid Consistency Level: " + e.getMessage)
     }
-  } catch {
-    case e: Exception =>
-      throw InvalidConsistencyLevel("Invalid Consistency Level: " + e.getMessage)
-  }
 
 }
 
@@ -80,7 +85,8 @@ class DefaultClusterService @Inject() (config: Config) extends ClusterService wi
 
   val contactPoints: List[InetSocketAddress] = buildContactPointsFromString(config.getString(CONTACT_POINTS))
   val maybeConsistencyLevel: Option[ConsistencyLevel] = checkConsistencyLevel(config.getString(CONSISTENCY_LEVEL))
-  val maybeSerialConsistencyLevel: Option[ConsistencyLevel] = checkConsistencyLevel(config.getString(SERIAL_CONSISTENCY_LEVEL))
+  val maybeSerialConsistencyLevel: Option[ConsistencyLevel] =
+    checkConsistencyLevel(config.getString(SERIAL_CONSISTENCY_LEVEL))
   val withSSL: Boolean = config.getBoolean(WITH_SSL)
   val username: String = config.getString(USERNAME)
   val password: String = config.getString(PASSWORD)

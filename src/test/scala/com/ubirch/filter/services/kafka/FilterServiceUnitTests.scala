@@ -43,7 +43,13 @@ import scala.concurrent.duration.Duration
 /**
   * This class provides unit tests for most methods of the filter service.
   */
-class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMatchers with LazyLogging with EmbeddedCassandra with BeforeAndAfterAll {
+class FilterServiceUnitTests
+  extends AsyncWordSpec
+  with MockitoSugar
+  with MustMatchers
+  with LazyLogging
+  with EmbeddedCassandra
+  with BeforeAndAfterAll {
 
   override protected def beforeAll(): Unit = {
     startCassandra()
@@ -61,17 +67,20 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
   private val fakeData = ProcessingData(cr, protocolMessage)
 
   def FakeFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {
-    override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+    override def FilterService: ScopedBindingBuilder =
+      bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
   })) {}
 
   def InspectVerificationCacheFilterInjector: InjectorHelper = new InjectorHelper(List(new Binder {
     override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[VerificationInspectCache])
 
-    override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+    override def FilterService: ScopedBindingBuilder =
+      bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
   })) {}
 
   def ExceptionFilterServiceInjector: InjectorHelper = new InjectorHelper(List(new Binder {
-    override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[ExceptionFilterServ])
+    override def FilterService: ScopedBindingBuilder =
+      bind(classOf[AbstractFilterService]).to(classOf[ExceptionFilterServ])
   })) {}
 
   "The extractData() method" must {
@@ -101,7 +110,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -118,7 +128,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
 
         override def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinderAlwaysFound])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -135,7 +146,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -148,7 +160,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysException])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -165,7 +178,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -178,7 +192,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -213,7 +228,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -234,7 +250,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -259,7 +276,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -292,7 +310,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       def specialInjector: InjectorHelper = new InjectorHelper(List(new Binder {
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheStoreMock])
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[FakeFilterService])
       })) {}
 
       val Injector = specialInjector
@@ -358,7 +377,8 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val rDisable = cache.getFromVerificationCache(pmDisable.getPayload.asText().getBytes(StandardCharsets.UTF_8))
       val rEnable = cache.getFromVerificationCache(pmEnable.getPayload.asText().getBytes(StandardCharsets.UTF_8))
       val rDelete = cache.getFromVerificationCache(pmDelete.getPayload.asText().getBytes(StandardCharsets.UTF_8))
-      val rDefaultLater = cache.getFromVerificationCache(pmDefaultLater.getPayload.asText().getBytes(StandardCharsets.UTF_8))
+      val rDefaultLater =
+        cache.getFromVerificationCache(pmDefaultLater.getPayload.asText().getBytes(StandardCharsets.UTF_8))
 
       val base64Default = base64Encoder.encodeToString(rawPacket(pmDefault))
       val base64DefaultLater = base64Encoder.encodeToString(rawPacket(pmDefaultLater))
@@ -380,7 +400,9 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
       val conf = Injector.get[Config]
       val data = ProcessingData(cr, message.ubirchPacket)
       val exceptionFilterService = Injector.get[ExceptionFilterServ]
-      assertThrows[NeedForPauseException](Await.result(exceptionFilterService.reactOnReplayAttack(data, cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC)), Duration.Inf))
+      assertThrows[NeedForPauseException](Await.result(
+        exceptionFilterService.reactOnReplayAttack(data, cr, conf.getString(ProducerConfPaths.REJECTION_TOPIC)),
+        Duration.Inf))
     }
 
     "send the rejectionMessage successfully" in {
@@ -397,10 +419,11 @@ class FilterServiceUnitTests extends AsyncWordSpec with MockitoSugar with MustMa
     "Add the http headers" in {
       val Injector = FakeFilterServiceInjector
       val fakeFilterService = Injector.get[FakeFilterService]
-      val headers: Map[String, String] = fakeFilterService.generateReplayAttackProducerRecord(cr, "coucou").headers().asScala.map(h => h.key() -> new String(h.value(), UTF_8))(breakOut)
+      val headers: Map[String, String] =
+        fakeFilterService.generateReplayAttackProducerRecord(cr, "coucou").headers().asScala.map(h =>
+          h.key() -> new String(h.value(), UTF_8))(breakOut)
       headers(Values.HTTP_STATUS_CODE_HEADER) mustBe Values.HTTP_STATUS_CODE_REJECTION_ERROR
     }
   }
 
 }
-

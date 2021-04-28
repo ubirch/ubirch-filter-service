@@ -30,7 +30,8 @@ trait EventLogQueries extends TablePointer[EventLogRow] {
   * @param ec Represent the execution context for asynchronous processing.
   */
 @Singleton
-class EventsDAO @Inject() (val connectionService: ConnectionService)(implicit val ec: ExecutionContext) extends EventLogQueries {
+class EventsDAO @Inject() (val connectionService: ConnectionService)(implicit val ec: ExecutionContext)
+  extends EventLogQueries {
 
   val db: CassandraAsyncContext[SnakeCase.type] = connectionService.context
 

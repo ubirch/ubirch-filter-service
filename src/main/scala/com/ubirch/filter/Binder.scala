@@ -5,7 +5,12 @@ import com.google.inject.{ AbstractModule, Module }
 import com.typesafe.config.Config
 import com.ubirch.filter.model.cache.{ Cache, CacheImpl }
 import com.ubirch.filter.model.eventlog.{ CassandraFinder, Finder }
-import com.ubirch.filter.services.cluster.{ ClusterService, ConnectionService, DefaultClusterService, DefaultConnectionService }
+import com.ubirch.filter.services.cluster.{
+  ClusterService,
+  ConnectionService,
+  DefaultClusterService,
+  DefaultConnectionService
+}
 import com.ubirch.filter.services.config.ConfigProvider
 import com.ubirch.filter.services.execution.{ ExecutionProvider, SchedulerProvider }
 import com.ubirch.filter.services.kafka.{ AbstractFilterService, DefaultFilterService }
@@ -55,4 +60,3 @@ class Binder extends AbstractModule {
 object Binder {
   def modules: List[Module] = List(new Binder)
 }
-

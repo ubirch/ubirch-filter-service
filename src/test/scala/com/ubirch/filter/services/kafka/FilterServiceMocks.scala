@@ -18,7 +18,9 @@ import scala.concurrent.{ ExecutionContext, Future }
   * @param cache The cache is only used to record the messages being processed in this test.
   */
 @Singleton
-class ExceptionFilterServ @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends AbstractFilterService(cache, finder, config, lifecycle) {
+class ExceptionFilterServ @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit
+override val ec: ExecutionContext)
+  extends AbstractFilterService(cache, finder, config, lifecycle) {
   override def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = {
     Future {
       throw new Exception("test exception")
@@ -32,7 +34,10 @@ class ExceptionFilterServ @Inject() (cache: Cache, finder: Finder, config: Confi
   * @param cache The cache used to check if a message has already been received before.
   */
 @Singleton
-class FakeFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(override implicit val ec: ExecutionContext) extends DefaultFilterService(cache, finder, config, lifecycle) with MockitoSugar {
+class FakeFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit
+override val ec: ExecutionContext)
+  extends DefaultFilterService(cache, finder, config, lifecycle)
+  with MockitoSugar {
   override lazy val consumption: ConsumerRunner[String, String] = mock[ConsumerRunner[String, String]]
   override lazy val production: ProducerRunner[String, String] = mock[ProducerRunner[String, String]]
 

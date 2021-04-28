@@ -19,10 +19,10 @@ object MessageEnvelopeGenerator {
     * @return
     */
   def generateMsgEnvelope(
-      uuid: UUID = UUID.randomUUID(),
-      version: Int = 34,
-      hint: Int = 0,
-      payload: Object = "89319".getBytes()
+    uuid: UUID = UUID.randomUUID(),
+    version: Int = 34,
+    hint: Int = 0,
+    payload: Object = "89319".getBytes()
   ): MessageEnvelope = {
 
     val pmNew = new ProtocolMessage(version, uuid, hint, payload)

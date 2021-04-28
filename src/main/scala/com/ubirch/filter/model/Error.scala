@@ -23,10 +23,10 @@ import org.json4s.Formats
 import org.json4s.jackson.Serialization.{ read, write }
 
 case class Error(
-    error: String,
-    causes: Seq[String],
-    microservice: String = "filter-service",
-    requestId: String
+  error: String,
+  causes: Seq[String],
+  microservice: String = "filter-service",
+  requestId: String
 ) {
 
   def toJson(implicit formats: Formats): String = {

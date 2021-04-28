@@ -47,7 +47,9 @@ trait ConnectionService extends ConnectionServiceBase {
 
 @Singleton
 class DefaultConnectionService @Inject() (clusterService: ClusterService, config: Config, lifecycle: Lifecycle)
-  extends ConnectionService with CassandraClusterConfPaths with LazyLogging {
+  extends ConnectionService
+  with CassandraClusterConfPaths
+  with LazyLogging {
 
   val keyspace: String = config.getString(KEYSPACE)
   val preparedStatementCacheSize: Int = config.getInt(PREPARED_STATEMENT_CACHE_SIZE)
