@@ -83,7 +83,8 @@ trait WithPrometheusMetrics {
   */
 abstract class Boot(modules: List[Module]) extends InjectorHelper(modules) with WithPrometheusMetrics {
   def *[T](block: => T): Unit =
-    try { block } catch {
+    try { block }
+    catch {
       case e: Exception =>
         logger.error("Exiting after exception found = {}", e.getMessage)
         Thread.sleep(5000)

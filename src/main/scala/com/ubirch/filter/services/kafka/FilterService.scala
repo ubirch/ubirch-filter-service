@@ -72,7 +72,10 @@ trait FilterService {
     * @param cr               The consumer record of the replay attack.
     * @param rejectionMessage The rejection message defining if attack recognised by cache or lookup service.
     */
-  def reactOnReplayAttack(data: ProcessingData, cr: ConsumerRecord[String, String], rejectionMessage: String): Future[Option[RecordMetadata]]
+  def reactOnReplayAttack(
+    data: ProcessingData,
+    cr: ConsumerRecord[String, String],
+    rejectionMessage: String): Future[Option[RecordMetadata]]
 
   /**
     * Method that throws an exception in case the service cannot execute it's functionality properly
@@ -88,5 +91,9 @@ trait FilterService {
     *                               of further messages.
     */
   @throws[NeedForPauseException]
-  def pauseKafkaConsumption(errorMessage: String, cr: ConsumerRecord[String, String], ex: Throwable, mayBeDuration: FiniteDuration): Nothing
+  def pauseKafkaConsumption(
+    errorMessage: String,
+    cr: ConsumerRecord[String, String],
+    ex: Throwable,
+    mayBeDuration: FiniteDuration): Nothing
 }

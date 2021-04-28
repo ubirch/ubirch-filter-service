@@ -38,16 +38,17 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-        ConfigValueFactory.fromAnyRef(bootstrapServers)
-      )
+      ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+      ConfigValueFactory.fromAnyRef(bootstrapServers)
+    )
   }
 
   /**
     * Simple injector that replaces the kafka bootstrap server and topics to the given ones
     */
   def FakeSimpleInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-    override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+    override def Config: ScopedBindingBuilder =
+      bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
   })) {}
 
   override protected def beforeAll(): Unit = {
@@ -90,7 +91,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+        override def Config: ScopedBindingBuilder =
+          bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
 
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
       })) {}
@@ -130,7 +132,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+        override def Config: ScopedBindingBuilder =
+          bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
 
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
       })) {}
@@ -150,7 +153,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
           fail()
         } catch {
           case _: java.util.concurrent.TimeoutException =>
-          case _: Throwable => fail()
+          case _: Throwable                             => fail()
         }
       }
     }
@@ -160,7 +163,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val uuid1 = UUID.randomUUID()
       val uuid2 = UUID.randomUUID()
       val uuid3 = UUID.randomUUID()
-      val list = List((uuid1, "c29tZSBieXRlcyEXXAAQIDnw==", 250), (uuid2, "helloNohello", 251), (uuid3, "byeNobye", 252))
+      val list =
+        List((uuid1, "c29tZSBieXRlcyEXXAAQIDnw==", 250), (uuid2, "helloNohello", 251), (uuid3, "byeNobye", 252))
 
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
@@ -168,7 +172,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+        override def Config: ScopedBindingBuilder =
+          bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
 
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
       })) {}
@@ -203,7 +208,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val uuid1 = UUID.randomUUID()
       val uuid2 = UUID.randomUUID()
       val uuid3 = UUID.randomUUID()
-      val list = List((uuid1, "c29tZSBieXRlcyEAAQIDnw78==", 250), (uuid2, "hellohellohello", 251), (uuid3, "byebyebye", 252))
+      val list =
+        List((uuid1, "c29tZSBieXRlcyEAAQIDnw78==", 250), (uuid2, "hellohellohello", 251), (uuid3, "byebyebye", 252))
 
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
@@ -211,7 +217,8 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       def testInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+        override def Config: ScopedBindingBuilder =
+          bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
 
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysFalse])
       })) {}

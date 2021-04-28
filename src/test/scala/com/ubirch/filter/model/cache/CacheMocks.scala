@@ -34,7 +34,8 @@ class CacheMockAlwaysException extends Cache {
 
   def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.failed(new TimeoutException())
 
-  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = Future.failed(new TimeoutException())
+  def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] =
+    Future.failed(new TimeoutException())
 
   def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = Future.successful(true)
 }

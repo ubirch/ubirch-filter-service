@@ -49,7 +49,12 @@ import scala.language.postfixOps
   * This class provides all integration tests, except for those testing a missing redis connection on startup.
   * The Kafka config has to be inside each single test to enable parallel testing with different ports.
   */
-class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
+class FilterServiceIntegrationTest
+  extends TestBase
+  with EmbeddedRedis
+  with EmbeddedCassandra
+  with LazyLogging
+  with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -66,16 +71,17 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-        ConfigValueFactory.fromAnyRef(bootstrapServers)
-      )
+      ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+      ConfigValueFactory.fromAnyRef(bootstrapServers)
+    )
   }
 
   /**
     * Simple injector that replaces the kafka bootstrap server and topics to the given ones
     */
   def FakeSimpleInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-    override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+    override def Config: ScopedBindingBuilder =
+      bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
   })) {}
 
   override protected def beforeAll(): Unit = {
@@ -159,7 +165,8 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       val bootstrapServers = "localhost:" + kafkaConfig.kafkaPort
 
       def FakeInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-        override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+        override def Config: ScopedBindingBuilder =
+          bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
 
         override def Finder: ScopedBindingBuilder = bind(classOf[Finder]).to(classOf[CassandraFinderAlwaysFound])
       })) {}
@@ -222,7 +229,8 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       def FakeInjectorCustomCache(configProvider: ConfigProvider): InjectorHelper = new InjectorHelper(List(new Binder {
         override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(configProvider)
 
-        override def FilterService: ScopedBindingBuilder = bind(classOf[AbstractFilterService]).to(classOf[ExceptionFilterServ])
+        override def FilterService: ScopedBindingBuilder =
+          bind(classOf[AbstractFilterService]).to(classOf[ExceptionFilterServ])
 
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CustomCache])
       })) {}
@@ -268,12 +276,12 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
             ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-              ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-              ConfigValueFactory.fromAnyRef(bootstrapServers)
-            ).withValue(
-                FilterConfPaths.FILTER_STATE,
-                ConfigValueFactory.fromAnyRef(false)
-              )
+            ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            FilterConfPaths.FILTER_STATE,
+            ConfigValueFactory.fromAnyRef(false)
+          )
         })
 
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[VerificationInspectCache])
@@ -315,15 +323,15 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
             ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
             ConfigValueFactory.fromAnyRef(bootstrapServers)
           ).withValue(
-              ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-              ConfigValueFactory.fromAnyRef(bootstrapServers)
-            ).withValue(
-                FilterConfPaths.ENVIRONMENT,
-                ConfigValueFactory.fromAnyRef(Values.PRODUCTION_NAME)
-              ).withValue(
-                  FilterConfPaths.FILTER_STATE,
-                  ConfigValueFactory.fromAnyRef(false)
-                )
+            ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+            ConfigValueFactory.fromAnyRef(bootstrapServers)
+          ).withValue(
+            FilterConfPaths.ENVIRONMENT,
+            ConfigValueFactory.fromAnyRef(Values.PRODUCTION_NAME)
+          ).withValue(
+            FilterConfPaths.FILTER_STATE,
+            ConfigValueFactory.fromAnyRef(false)
+          )
         })
 
         override def Cache: ScopedBindingBuilder = bind(classOf[Cache]).to(classOf[CacheMockAlwaysTrue])
@@ -357,7 +365,7 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
       implicit val ec: ExecutionContext = Injector.get[ExecutionContext]
       result match {
         case Some(_) => fail()
-        case None =>
+        case None    =>
       }
     }
   }
@@ -375,4 +383,3 @@ class FilterServiceIntegrationTest extends TestBase with EmbeddedRedis with Embe
   }
 
 }
-

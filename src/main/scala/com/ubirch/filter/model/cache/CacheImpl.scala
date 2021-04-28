@@ -21,7 +21,9 @@ import scala.concurrent.{ Future, Promise }
   */
 @Singleton
 class CacheImpl @Inject() (lifecycle: Lifecycle, config: Config)(implicit scheduler: Scheduler)
-  extends Cache with LazyLogging with RedisConfPaths {
+  extends Cache
+  with LazyLogging
+  with RedisConfPaths {
 
   private val port: String = config.getString(REDIS_PORT)
   private val password: String = config.getString(REDIS_PASSWORD)
@@ -85,7 +87,8 @@ class CacheImpl @Inject() (lifecycle: Lifecycle, config: Config)(implicit schedu
     */
   @throws[NoCacheConnectionException]
   def getFromFilterCache(hash: Array[Byte]): Future[Option[String]] = {
-    if (filterCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    if (filterCache == null)
+      Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
     else {
       val p = Promise[Option[String]]()
 
@@ -112,7 +115,8 @@ class CacheImpl @Inject() (lifecycle: Lifecycle, config: Config)(implicit schedu
     */
   @throws[NoCacheConnectionException]
   def setToFilterCache(hash: Array[Byte], upp: String): Future[Option[String]] = {
-    if (filterCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    if (filterCache == null)
+      Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
     else {
       val p = Promise[Option[String]]()
       val listener = new BiConsumer[String, Throwable] {
@@ -137,7 +141,8 @@ class CacheImpl @Inject() (lifecycle: Lifecycle, config: Config)(implicit schedu
     */
   @throws[NoCacheConnectionException]
   def setToVerificationCache(hash: Array[Byte], upp: String): Future[Option[String]] = {
-    if (verifyCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    if (verifyCache == null)
+      Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
     else {
       val p = Promise[Option[String]]()
       val listener = new BiConsumer[String, Throwable] {
@@ -162,7 +167,8 @@ class CacheImpl @Inject() (lifecycle: Lifecycle, config: Config)(implicit schedu
     */
   @throws[NoCacheConnectionException]
   def deleteFromVerificationCache(hash: Array[Byte]): Future[Boolean] = {
-    if (verifyCache == null) Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
+    if (verifyCache == null)
+      Future.failed(NoCacheConnectionException("redis error - a connection could not become established yet"))
     else {
       Future.successful(verifyCache.fastRemove(hash) == 1)
     }

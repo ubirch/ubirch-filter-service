@@ -26,7 +26,8 @@ class ExecutionProvider @Inject() (config: Config) extends Provider[ExecutionCon
 
   val threadPoolSize: Int = config.getInt("filterService.threads")
 
-  override implicit val ec: ExecutionContextExecutor = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(threadPoolSize))
+  implicit override val ec: ExecutionContextExecutor =
+    ExecutionContext.fromExecutor(Executors.newFixedThreadPool(threadPoolSize))
 
   override def get(): ExecutionContext = ec
 
@@ -46,7 +47,7 @@ trait SchedulerBase {
 @Singleton
 class SchedulerProvider @Inject() (ec: ExecutionContext) extends Provider[Scheduler] with SchedulerBase {
 
-  override implicit val scheduler: Scheduler = monix.execution.Scheduler(ec)
+  implicit override val scheduler: Scheduler = monix.execution.Scheduler(ec)
 
   override def get(): Scheduler = monix.execution.Scheduler(ec)
 

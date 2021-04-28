@@ -38,7 +38,12 @@ import java.util.concurrent.TimeoutException
 import scala.language.postfixOps
 import scala.sys.process._
 
-class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRedis with EmbeddedCassandra with LazyLogging with BeforeAndAfter {
+class FilterServiceIntegrationTestWithoutCache
+  extends TestBase
+  with EmbeddedRedis
+  with EmbeddedCassandra
+  with LazyLogging
+  with BeforeAndAfter {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -63,16 +68,17 @@ class FilterServiceIntegrationTestWithoutCache extends TestBase with EmbeddedRed
       ConsumerConfPaths.CONSUMER_BOOTSTRAP_SERVERS,
       ConfigValueFactory.fromAnyRef(bootstrapServers)
     ).withValue(
-        ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
-        ConfigValueFactory.fromAnyRef(bootstrapServers)
-      )
+      ProducerConfPaths.PRODUCER_BOOTSTRAP_SERVERS,
+      ConfigValueFactory.fromAnyRef(bootstrapServers)
+    )
   }
 
   /**
     * Simple Guice injector that mimicate the default one but replace the bootstrap and consumer topics by the provided one
     */
   def FakeSimpleInjector(bootstrapServers: String): InjectorHelper = new InjectorHelper(List(new Binder {
-    override def Config: ScopedBindingBuilder = bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
+    override def Config: ScopedBindingBuilder =
+      bind(classOf[Config]).toProvider(customTestConfigProvider(bootstrapServers))
   })) {}
 
   override protected def beforeEach(): Unit = {
