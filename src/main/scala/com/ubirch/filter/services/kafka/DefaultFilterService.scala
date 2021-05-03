@@ -18,30 +18,30 @@ package com.ubirch.filter.services.kafka
 
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import com.ubirch.filter.ConfPaths.{ ConsumerConfPaths, FilterConfPaths, ProducerConfPaths }
-import com.ubirch.filter.model.Values.{ UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE }
+import com.ubirch.filter.ConfPaths.{ConsumerConfPaths, FilterConfPaths, ProducerConfPaths}
+import com.ubirch.filter.model.Values.{UPP_TYPE_DELETE, UPP_TYPE_DISABLE, UPP_TYPE_ENABLE}
 import com.ubirch.filter.model._
 import com.ubirch.filter.model.cache.Cache
 import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.services.Lifecycle
-import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Decoder, base64Encoder, msgPackDecoder, rawPacket }
+import com.ubirch.filter.util.ProtocolMessageUtils.{base64Decoder, base64Encoder, msgPackDecoder, rawPacket}
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
-import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord, _ }
+import com.ubirch.kafka.{MessageEnvelope, RichAnyConsumerRecord, _}
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
+import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.serialization
 import org.apache.kafka.common.serialization._
 import org.json4s._
 import org.json4s.jackson.JsonMethods.parse
 
 import java.util.concurrent.TimeoutException
-import javax.inject.{ Inject, Singleton }
+import javax.inject.{Inject, Singleton}
 import scala.collection.immutable
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, Future }
-import scala.language.{ implicitConversions, postfixOps }
+import scala.concurrent.{ExecutionContext, Future}
+import scala.language.{implicitConversions, postfixOps}
 
 /**
   * * This service is responsible to check incoming messages for any suspicious
@@ -392,7 +392,7 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
     cr: ConsumerRecord[String, String],
     rejectionMessage: String): Future[Option[RecordMetadata]] = {
 
-    val r1 = deleteFromOrAddToVerificationCache(data)
+    val r1 = addToFilterCache(data)
     val r2 = sendAndRetry(generateReplayAttackProducerRecord(cr, rejectionMessage), data.cr)
     for {
       _ <- r1
