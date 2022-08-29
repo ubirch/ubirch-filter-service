@@ -67,7 +67,7 @@
         <io.monix.version>2.3.2</io.monix.version>
         <guice.version>4.1.0</guice.version>
         <embedded-cassandra-test>1.2.9</embedded-cassandra-test>
-        <ubirch-crypto.version>2.0.6</ubirch-crypto.version>
+        <ubirch-crypto.version>2.1.4-SNAPSHOT</ubirch-crypto.version>
 
         <!-- plugins -->
         <scala-maven-plugin.version>3.3.2</scala-maven-plugin.version>
