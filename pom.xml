@@ -66,8 +66,10 @@
         <scala.compat.version>2.12</scala.compat.version>
         <io.monix.version>2.3.2</io.monix.version>
         <guice.version>4.1.0</guice.version>
-        <embedded-cassandra-test>1.2.9</embedded-cassandra-test>
+        <embedded-cassandra-test>4.0.7</embedded-cassandra-test>
         <ubirch-crypto.version>2.0.6</ubirch-crypto.version>
+        <io.getquill.version>4.6.0</io.getquill.version>
+        <ubirch-cassandra-utils.version>1.0-SNAPSHOT</ubirch-cassandra-utils.version>
 
         <!-- plugins -->
         <scala-maven-plugin.version>3.3.2</scala-maven-plugin.version>
@@ -97,6 +99,10 @@
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
+        </repository>
+        <repository>
+            <id>gitlab-maven</id>
+            <url>https://gitlab.com/api/v4/projects/37429227/packages/maven</url>
         </repository>
     </repositories>
 
@@ -143,7 +149,7 @@
 
         <dependency>
             <groupId>com.github.nosan</groupId>
-            <artifactId>embedded-cassandra-test</artifactId>
+            <artifactId>embedded-cassandra</artifactId>
             <version>${embedded-cassandra-test}</version>
         </dependency>
 
@@ -154,17 +160,23 @@
         </dependency>
 
 
+        <dependency>
+            <groupId>com.ubirch</groupId>
+            <artifactId>ubirch-cassandra-utils_${scala.compat.version}</artifactId>
+            <version>${ubirch-cassandra-utils.version}</version>
+        </dependency>
+
         <!-- https://mvnrepository.com/artifact/io.getquill/quill-cassandra-monix -->
         <dependency>
             <groupId>io.getquill</groupId>
             <artifactId>quill-cassandra-monix_${scala.compat.version}</artifactId>
-            <version>3.4.10</version>
+            <version>${io.getquill.version}</version>
         </dependency>
 
         <dependency>
             <groupId>io.getquill</groupId>
             <artifactId>quill-cassandra_${scala.compat.version}</artifactId>
-            <version>3.4.10</version>
+            <version>${io.getquill.version}</version>
         </dependency>
 
 

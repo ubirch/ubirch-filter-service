@@ -28,6 +28,7 @@ import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Encoder, rawPacket }
 import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper }
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.protocol.ProtocolMessage
+import com.ubirch.util.cassandra.test.EmbeddedCassandraBase
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{ AsyncWordSpec, BeforeAndAfterAll, MustMatchers }
@@ -48,16 +49,17 @@ class FilterServiceUnitTests
   with MockitoSugar
   with MustMatchers
   with LazyLogging
-  with EmbeddedCassandra
+  with EmbeddedCassandraBase
   with BeforeAndAfterAll {
 
+  val cassandra = new CassandraTest
+
   override protected def beforeAll(): Unit = {
-    startCassandra()
-    cassandra.executeScripts(eventLogCreationCassandraStatement)
+    cassandra.startAndExecuteScripts(EmbeddedCassandra.eventLogCreationCassandraStatements)
   }
 
   override def afterAll(): Unit = {
-    stopCassandra()
+    cassandra.stop()
   }
 
   val cr = new ConsumerRecord[String, String]("topic", 1, 1, "1234", "false")
