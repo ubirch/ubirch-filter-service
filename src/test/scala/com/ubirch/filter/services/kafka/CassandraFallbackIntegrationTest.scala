@@ -1,6 +1,6 @@
 package com.ubirch.filter.services.kafka
 
-import com.github.nosan.embedded.cassandra.cql.CqlScript
+import com.github.nosan.embedded.cassandra.cql.StringCqlScript
 import com.google.inject.binder.ScopedBindingBuilder
 import com.typesafe.config.{ Config, ConfigValueFactory }
 import com.typesafe.scalalogging.LazyLogging
@@ -12,6 +12,7 @@ import com.ubirch.filter.testUtils.MessageEnvelopeGenerator.generateMsgEnvelope
 import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
+import com.ubirch.util.cassandra.test.EmbeddedCassandraBase
 import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.common.serialization.{ Deserializer, Serializer }
@@ -21,7 +22,7 @@ import redis.embedded.RedisServer
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
-class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra with LazyLogging {
+class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandraBase with LazyLogging {
 
   implicit val seMsgEnv: Serializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeSerializer
   implicit val deMsgEnv: Deserializer[MessageEnvelope] = com.ubirch.kafka.EnvelopeDeserializer
@@ -29,6 +30,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
   implicit val deRej: Deserializer[Error] = Error.ErrorDeserializer
 
   var redis: RedisServer = _
+  val cassandra = new CassandraTest
 
   /**
     * Overwrite default bootstrap server and topic values of the kafka consumer and producers
@@ -52,12 +54,11 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
   })) {}
 
   override protected def beforeAll(): Unit = {
-    startCassandra()
-    cassandra.executeScripts(eventLogCreationCassandraStatement)
+    cassandra.startAndExecuteScripts(EmbeddedCassandra.eventLogCreationCassandraStatements)
   }
 
   override def afterAll(): Unit = {
-    stopCassandra()
+    cassandra.stop()
   }
 
   override protected def beforeEach(): Unit = {
@@ -79,11 +80,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
     "consume and processed as replayAttack when Found if not of type UPP update" in {
       val payload = "c29tZSBieXRlcyEAAQIDnw=="
 
-      cassandra.executeScripts(
-        CqlScript.statements(
-          insertEventSql(payload = payload)
-        )
-      )
+      cassandra.executeScripts(List(new StringCqlScript(insertEventSql(payload = payload))))
 
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
@@ -120,11 +117,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
     "consume and process successfully when not found if not of type UPP update" in {
       val payload = "c29tZSBieXRlcyEA7897932AQIDnw=="
 
-      cassandra.executeScripts(
-        CqlScript.statements(
-          insertEventSql(payload, "0")
-        )
-      )
+      cassandra.executeScripts(List(new StringCqlScript(insertEventSql(payload, "0"))))
 
       implicit val kafkaConfig: EmbeddedKafkaConfig =
         EmbeddedKafkaConfig(kafkaPort = PortGiver.giveMeKafkaPort, zooKeeperPort = PortGiver.giveMeZookeeperPort)
@@ -248,11 +241,7 @@ class CassandraFallbackIntegrationTest extends TestBase with EmbeddedCassandra w
   }
 
   def addToCassandra(uuid: UUID, payload: String, hint: Int): Unit = {
-    cassandra.executeScripts(
-      CqlScript.statements(
-        insertEventSql(uuid.toString, payload, hint)
-      )
-    )
+    cassandra.executeScripts(List(new StringCqlScript(insertEventSql(uuid.toString, payload, hint))))
   }
 
   def insertEventSql(uuid: String = UUID.randomUUID().toString, payload: String, hint: Int = 0): String =

@@ -1,9 +1,9 @@
 package com.ubirch.filter.model.eventlog
 
-import java.util.Date
-
 import io.getquill.Embedded
 import org.json4s.JValue
+
+import java.time.Instant
 
 /**
   * Concrete type for the EventLogBase whose type T is JValue
@@ -33,11 +33,11 @@ case class EventLogRow(
   serviceClass: String,
   category: String,
   event: JValue,
-  eventTime: Date,
+  eventTime: Instant,
   eventTimeInfo: TimeInfo,
   signature: String,
   nonce: String,
-  status: Option[String] = None
+  status: Option[Instant] = None
 )
 
 /**

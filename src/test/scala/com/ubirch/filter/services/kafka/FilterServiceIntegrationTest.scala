@@ -30,6 +30,7 @@ import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Encoder, rawPacket }
 import com.ubirch.filter.{ Binder, EmbeddedCassandra, InjectorHelper, TestBase }
 import com.ubirch.kafka.MessageEnvelope
 import com.ubirch.kafka.util.PortGiver
+import com.ubirch.util.cassandra.test.EmbeddedCassandraBase
 import io.prometheus.client.CollectorRegistry
 import net.manub.embeddedkafka.{ EmbeddedKafka, EmbeddedKafkaConfig }
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -52,7 +53,7 @@ import scala.language.postfixOps
 class FilterServiceIntegrationTest
   extends TestBase
   with EmbeddedRedis
-  with EmbeddedCassandra
+  with EmbeddedCassandraBase
   with LazyLogging
   with BeforeAndAfter {
 
@@ -62,6 +63,7 @@ class FilterServiceIntegrationTest
   implicit val deRej: Deserializer[Error] = Error.ErrorDeserializer
 
   var redis: RedisServer = _
+  val cassandra = new CassandraTest
 
   /**
     * Overwrite default bootstrap server and topic values of the kafka consumer and producers
@@ -85,12 +87,11 @@ class FilterServiceIntegrationTest
   })) {}
 
   override protected def beforeAll(): Unit = {
-    startCassandra()
-    cassandra.executeScripts(eventLogCreationCassandraStatement)
+    cassandra.startAndExecuteScripts(EmbeddedCassandra.eventLogCreationCassandraStatements)
   }
 
   override def afterAll(): Unit = {
-    stopCassandra()
+    cassandra.stop()
   }
 
   /**

@@ -1,9 +1,9 @@
 package com.ubirch.filter.model.eventlog
 
 import com.ubirch.filter.services.cluster.ConnectionService
-import io.getquill.{ CassandraAsyncContext, SnakeCase }
-import javax.inject._
+import io.getquill.{ CassandraAsyncContext, EntityQuery, Quoted, SnakeCase }
 
+import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
 
 /**
@@ -17,7 +17,7 @@ trait EventLogQueries extends TablePointer[EventLogRow] {
 
   implicit val eventSchemaMeta: db.SchemaMeta[EventLogRow] = schemaMeta[EventLogRow]("events")
 
-  def byIdAndCatQ(id: String, category: String): db.Quoted[db.EntityQuery[String]] = quote {
+  def byIdAndCatQ(id: String, category: String): Quoted[EntityQuery[String]] = quote {
     query[EventLogRow].filter(x => x.id == lift(id) && x.category == lift(category)).map(x => x.id)
   }
 
@@ -33,7 +33,7 @@ trait EventLogQueries extends TablePointer[EventLogRow] {
 class EventsDAO @Inject() (val connectionService: ConnectionService)(implicit val ec: ExecutionContext)
   extends EventLogQueries {
 
-  val db: CassandraAsyncContext[SnakeCase.type] = connectionService.context
+  val db: CassandraAsyncContext[SnakeCase] = connectionService.context
 
   import db._
 
