@@ -1,24 +1,27 @@
 package com.ubirch.filter.model.eventlog
 
 import com.ubirch.filter.services.cluster.ConnectionService
-import io.getquill.{ CassandraAsyncContext, EntityQuery, Quoted, SnakeCase }
+import io.getquill.{ CassandraAsyncContext, SnakeCase }
 
 import javax.inject._
 import scala.concurrent.{ ExecutionContext, Future }
 
 /**
   * Represents the queries linked to the EventLogRow case class and to the Events Table
+  *
+  * @important
+  * Since at least quill 3.12, dynamic query might leads to OutOfMemory.
+  * Therefore, we need to avoid using it.
+  * @see [[https://github.com/zio/zio-quill/issues/2484]]
   */
-trait EventLogQueries extends TablePointer[EventLogRow] {
+trait EventLogQueries extends CassandraBase {
 
   import db._
 
   //These represent query descriptions only
 
-  implicit val eventSchemaMeta: db.SchemaMeta[EventLogRow] = schemaMeta[EventLogRow]("events")
-
-  def byIdAndCatQ(id: String, category: String): Quoted[EntityQuery[String]] = quote {
-    query[EventLogRow].filter(x => x.id == lift(id) && x.category == lift(category)).map(x => x.id)
+  def byIdAndCatQ(id: String, category: String) = quote {
+    querySchema[EventLogRow]("events").filter(x => x.id == lift(id) && x.category == lift(category)).map(x => x.id)
   }
 
 }
