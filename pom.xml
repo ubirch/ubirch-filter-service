@@ -69,7 +69,7 @@
         <embedded-cassandra-test>4.0.7</embedded-cassandra-test>
         <ubirch-crypto.version>2.0.6</ubirch-crypto.version>
         <io.getquill.version>4.6.0</io.getquill.version>
-        <ubirch-cassandra-utils.version>1.0-SNAPSHOT</ubirch-cassandra-utils.version>
+        <ubirch-cassandra-utils.version>1.0</ubirch-cassandra-utils.version>
 
         <!-- plugins -->
         <scala-maven-plugin.version>3.3.2</scala-maven-plugin.version>
