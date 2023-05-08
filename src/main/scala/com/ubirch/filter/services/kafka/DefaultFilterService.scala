@@ -28,6 +28,7 @@ import com.ubirch.filter.util.ProtocolMessageUtils.{ base64Decoder, base64Encode
 import com.ubirch.kafka.express.ExpressKafka
 import com.ubirch.kafka.util.Exceptions.NeedForPauseException
 import com.ubirch.kafka.{ MessageEnvelope, RichAnyConsumerRecord, _ }
+import monix.execution.Scheduler
 import net.logstash.logback.argument.StructuredArguments.v
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
@@ -60,7 +61,9 @@ import scala.language.{ implicitConversions, postfixOps }
 @Singleton
 class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit
 val ec: ExecutionContext)
-  extends AbstractFilterService(cache, finder, config, lifecycle)
+  extends AbstractFilterService(cache, finder, config, lifecycle) {
+  implicit val scheduler: Scheduler = Scheduler(ec)
+}
 
 abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)
   extends FilterService
@@ -383,9 +386,6 @@ abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Confi
           false
       }
   }
-
-  protected def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] =
-    production.send(producerRecord)
 
   def reactOnReplayAttack(
     data: ProcessingData,
