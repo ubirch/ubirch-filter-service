@@ -6,6 +6,8 @@ import com.ubirch.filter.model.eventlog.Finder
 import com.ubirch.filter.services.Lifecycle
 import com.ubirch.kafka.consumer.ConsumerRunner
 import com.ubirch.kafka.producer.ProducerRunner
+import monix.execution.Scheduler
+
 import javax.inject.{ Inject, Singleton }
 import org.apache.kafka.clients.producer.{ ProducerRecord, RecordMetadata }
 import org.scalatest.mockito.MockitoSugar
@@ -19,11 +21,13 @@ import scala.concurrent.{ ExecutionContext, Future }
   */
 @Singleton
 class ExceptionFilterServ @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit
-override val ec: ExecutionContext)
+val ec: ExecutionContext)
   extends AbstractFilterService(cache, finder, config, lifecycle) {
+  implicit val scheduler: Scheduler = Scheduler(ec)
+
   override def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = {
-    Future {
-      throw new Exception("test exception")
+    Future.failed {
+      new Exception("test exception")
     }
   }
 }
@@ -45,12 +49,12 @@ override val ec: ExecutionContext)
 
   override def send(producerRecord: ProducerRecord[String, String]): Future[RecordMetadata] = {
     counter = 1
-    Future(mock[RecordMetadata])
+    Future.successful(mock[RecordMetadata])
   }
 
   override def send(topic: String, value: String): Future[RecordMetadata] = {
     counter = 1
-    Future(mock[RecordMetadata])
+    Future.successful(mock[RecordMetadata])
   }
 
 }
