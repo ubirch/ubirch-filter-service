@@ -38,8 +38,9 @@ val ec: ExecutionContext)
   * @param cache The cache used to check if a message has already been received before.
   */
 @Singleton
-class FakeFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit
-override val ec: ExecutionContext)
+class FakeFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(
+  implicit override val ec: ExecutionContext,
+  override val scheduler: Scheduler)
   extends DefaultFilterService(cache, finder, config, lifecycle)
   with MockitoSugar {
   override lazy val consumption: ConsumerRunner[String, String] = mock[ConsumerRunner[String, String]]

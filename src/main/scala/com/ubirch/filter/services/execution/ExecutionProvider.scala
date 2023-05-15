@@ -49,6 +49,6 @@ class SchedulerProvider @Inject() (ec: ExecutionContext) extends Provider[Schedu
 
   implicit override val scheduler: Scheduler = monix.execution.Scheduler(ec)
 
-  override def get(): Scheduler = monix.execution.Scheduler(ec)
+  override def get(): Scheduler = scheduler
 
 }
