@@ -59,11 +59,10 @@ import scala.language.{ implicitConversions, postfixOps }
   * @author ${user.name}
   */
 @Singleton
-class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(implicit
-val ec: ExecutionContext)
-  extends AbstractFilterService(cache, finder, config, lifecycle) {
-  implicit val scheduler: Scheduler = Scheduler(ec)
-}
+class DefaultFilterService @Inject() (cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)(
+  implicit val ec: ExecutionContext,
+  val scheduler: Scheduler)
+  extends AbstractFilterService(cache, finder, config, lifecycle)
 
 abstract class AbstractFilterService(cache: Cache, finder: Finder, config: Config, lifecycle: Lifecycle)
   extends FilterService
